@@ -22,8 +22,8 @@ Sistem absensi berbasis Node.js (Express), SQLite, dan EJS yang dirancang ringan
 
 1. **Clone repositori ini:**
    ```bash
-   git clone https://github.com/jmukhlishin/sistem-absensi-nodejs.git
-   cd sistem-absensi-nodejs
+   git clone https://github.com/jmukhlishin/absensi.git
+   cd absensi
    ```
 
 2. **Install dependensi:**
