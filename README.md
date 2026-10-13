@@ -1,3 +1,9 @@
+## Project Files Structure 
+
+- server.js: Backend Express sekaligus inisialisasi tabel absensi otomatis.
+- views/index.ejs: Halaman antarmuka dashboard untuk melihat log dan riwayat absensi.
+- README.md: Panduan instalasi dan deployment di Ubuntu Server menggunakan PM2.
+
 # Sistem Absensi Node.js
 
 Sistem absensi berbasis Node.js (Express), SQLite, dan EJS yang dirancang ringan dan siap berjalan di server lokal Ubuntu berdampingan dengan **n8n**.
