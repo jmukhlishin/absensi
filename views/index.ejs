@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Absensi Sederhana</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background-color: #f4f7f6; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        h1, h2 { color: #333; text-align: center; }
+        form { display: flex; flex-direction: column; gap: 15px; margin-bottom: 30px; padding: 20px; background-color: #f9f9f9; border-radius: 8px; }
+        input, select, button { padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; }
+        button { background-color: #28a745; color: white; cursor: pointer; border: none; font-weight: bold; }
+        button:hover { background-color: #218838; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #007bff; color: white; }
+        tr:nth-child(even) { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Sistem Absensi</h1>
+        
+        <form action="/absen" method="POST">
+            <input type="text" name="nama" placeholder="Nama Lengkap" required>
+            <select name="status" required>
+                <option value="Hadir">Hadir</option>
+                <option value="Izin">Izin</option>
+                <option value="Sakit">Sakit</option>
+            </select>
+            <button type="submit">Kirim Absensi</button>
+        </form>
+
+        <h2>Data Absensi</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nama</th>
+                    <th>Waktu</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                <% if (data.length > 0) { %>
+                    <% data.forEach(row => { %>
+                        <tr>
+                            <td><%= row.id %></td>
+                            <td><%= row.nama %></td>
+                            <td><%= row.waktu %></td>
+                            <td><%= row.status %></td>
+                        </tr>
+                    <% }) %>
+                <% } else { %>
+                    <tr>
+                        <td colspan="4" style="text-align: center;">Belum ada data absensi.</td>
+                    </tr>
+                <% } %>
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>
