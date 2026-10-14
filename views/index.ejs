@@ -8,7 +8,7 @@
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background-color: #f4f7f6; }
         .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
         h1, h2 { color: #333; text-align: center; }
-        .nav { display: flex; justify-content: space-between; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #ddd; }
+        .nav { display: flex; justify-content: space-between; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #ddd; align-items: center; }
         .nav a { text-decoration: none; color: #007bff; font-weight: bold; margin-left: 15px; }
         .nav a:hover { text-decoration: underline; }
         
@@ -25,9 +25,10 @@
         button { background-color: #28a745; color: white; cursor: pointer; border: none; font-weight: bold; }
         button:hover { background-color: #218838; }
         
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        .table-container { max-height: 500px; overflow-y: auto; border: 1px solid #ddd; margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 0; }
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
-        th { background-color: #007bff; color: white; }
+        th { background-color: #007bff; color: white; position: sticky; top: 0; z-index: 1; }
         tr:nth-child(even) { background-color: #f2f2f2; }
     </style>
 </head>
@@ -37,10 +38,15 @@
             <div>
                 <strong>Login sebagai:</strong> <%= admin %>
             </div>
-            <div>
+            <div style="display: flex; align-items: center; gap: 15px;">
                 <a href="/">Dashboard</a>
                 <a href="/karyawan">Kelola Karyawan</a>
-                <a href="/print" target="_blank">Cetak Laporan</a>
+                <form action="/print" method="GET" target="_blank" style="display: flex; flex-direction: row; gap: 5px; margin: 0; padding: 0; background: transparent; border: none; align-items: center; margin-left: 15px;">
+                    <input type="date" name="start" required style="padding: 4px; font-size: 14px;">
+                    <span style="font-size: 14px; font-weight: bold;">s/d</span>
+                    <input type="date" name="end" required style="padding: 4px; font-size: 14px;">
+                    <button type="submit" style="padding: 5px 10px; font-size: 14px; background-color: #007bff;">Cetak Laporan</button>
+                </form>
             </div>
         </div>
 
@@ -66,33 +72,45 @@
             </div>
         </div>
         
-        <h2>Karyawan Terbaru Absen</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>ID Log</th>
-                    <th>Nama</th>
-                    <th>Waktu (Check-In / Out)</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody id="absensi-table-body">
-                <% if (data.length > 0) { %>
-                    <% data.forEach(row => { %>
-                        <tr>
-                            <td><%= row.id %></td>
-                            <td><%= row.nama || 'Tidak Diketahui' %></td>
-                            <td><%= row.waktu %></td>
-                            <td><%= row.status %></td>
-                        </tr>
-                    <% }) %>
-                <% } else { %>
+        <h2>Log Absen Karyawan</h2>
+        <div class="table-container">
+            <table>
+                <thead>
                     <tr>
-                        <td colspan="4" style="text-align: center;">Belum ada data absensi.</td>
+                        <th>ID Log</th>
+                        <th>Nama</th>
+                        <th>Waktu (Check-In / Out)</th>
+                        <th>Status</th>
                     </tr>
-                <% } %>
-            </tbody>
-        </table>
+                </thead>
+                <tbody id="absensi-table-body">
+                    <% if (data.length > 0) { %>
+                        <% data.forEach(row => { %>
+                            <tr>
+                                <td><%= row.id %></td>
+                                <td><%= row.nama || 'Tidak Diketahui' %></td>
+                                <td><%= row.waktu %></td>
+                                <td><%= row.status %></td>
+                            </tr>
+                        <% }) %>
+                    <% } else { %>
+                        <tr>
+                            <td colspan="4" style="text-align: center;">Belum ada data absensi.</td>
+                        </tr>
+                    <% } %>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="pagination" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 20px;">
+            <% if (currentPage > 1) { %>
+                <a href="/?page=<%= currentPage - 1 %>" style="padding: 8px 12px; background: #007bff; color: white; text-decoration: none; border-radius: 4px;">Sebelumnya</a>
+            <% } %>
+            <span style="font-weight: bold;">Halaman <%= currentPage %> dari <%= totalPages %></span>
+            <% if (currentPage < totalPages) { %>
+                <a href="/?page=<%= currentPage + 1 %>" style="padding: 8px 12px; background: #007bff; color: white; text-decoration: none; border-radius: 4px;">Selanjutnya</a>
+            <% } %>
+        </div>
     </div>
 
     <script>
@@ -126,7 +144,9 @@
         // Auto Refresh List Absensi (Realtime)
         async function fetchLatestAbsensi() {
             try {
-                const res = await fetch('/api/latest-absensi');
+                const urlParams = new URLSearchParams(window.location.search);
+                const page = urlParams.get('page') || 1;
+                const res = await fetch('/api/latest-absensi?page=' + page);
                 const data = await res.json();
                 const tbody = document.getElementById('absensi-table-body');
                 if (data.length > 0) {
