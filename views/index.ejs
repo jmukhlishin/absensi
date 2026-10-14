@@ -3,16 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistem Absensi Sederhana</title>
+    <title>Sistem Absensi Dashboard</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background-color: #f4f7f6; }
-        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
         h1, h2 { color: #333; text-align: center; }
+        .nav { display: flex; justify-content: space-between; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #ddd; }
+        .nav a { text-decoration: none; color: #007bff; font-weight: bold; margin-left: 15px; }
+        .nav a:hover { text-decoration: underline; }
+        
+        .dashboard-info { display: flex; justify-content: space-between; flex-wrap: wrap; margin-bottom: 20px; }
+        .info-card { background: #e9ecef; padding: 15px; border-radius: 6px; width: 48%; margin-bottom: 10px; box-sizing: border-box; }
+        .info-card h3 { margin: 0 0 10px 0; font-size: 16px; color: #555; }
+        .info-card p { margin: 0; font-size: 20px; font-weight: bold; color: #333; }
+        
+        .status-online { color: green; }
+        .status-offline { color: red; }
+        
         form { display: flex; flex-direction: column; gap: 15px; margin-bottom: 30px; padding: 20px; background-color: #f9f9f9; border-radius: 8px; }
         input, select, button { padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; }
         button { background-color: #28a745; color: white; cursor: pointer; border: none; font-weight: bold; }
         button:hover { background-color: #218838; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
         th { background-color: #007bff; color: white; }
         tr:nth-child(even) { background-color: #f2f2f2; }
@@ -20,9 +33,40 @@
 </head>
 <body>
     <div class="container">
-        <h1>Sistem Absensi</h1>
+        <div class="nav">
+            <div>
+                <strong>Login sebagai:</strong> <%= admin %>
+            </div>
+            <div>
+                <a href="/">Dashboard</a>
+                <a href="/karyawan">Kelola Karyawan</a>
+                <a href="/print" target="_blank">Cetak Laporan</a>
+            </div>
+        </div>
+
+        <h1>Dashboard Absensi</h1>
+        
+        <div class="dashboard-info">
+            <div class="info-card">
+                <h3>Waktu Sekarang</h3>
+                <p id="clock">00:00:00</p>
+            </div>
+            <div class="info-card">
+                <h3>Status Mesin (IP: 192.168.1.201)</h3>
+                <p id="machine-status">Mengecek...</p>
+            </div>
+            <div class="info-card">
+                <h3>Total Karyawan</h3>
+                <p><%= totalKaryawan %> Orang</p>
+            </div>
+            <div class="info-card">
+                <h3>Aksi Mesin</h3>
+                <button type="button" onclick="syncMachine()" style="width: 100%; padding: 8px; font-size:14px; background: #17a2b8;">Tarik Data dari Mesin</button>
+            </div>
+        </div>
         
         <form action="/absen" method="POST">
+            <h3>Absen Manual (Backup)</h3>
             <input type="text" name="nama" placeholder="Nama Lengkap" required>
             <select name="status" required>
                 <option value="Hadir">Hadir</option>
@@ -32,7 +76,7 @@
             <button type="submit">Kirim Absensi</button>
         </form>
 
-        <h2>Data Absensi</h2>
+        <h2>Karyawan Terbaru Absen</h2>
         <table>
             <thead>
                 <tr>
@@ -60,5 +104,49 @@
             </tbody>
         </table>
     </div>
+
+    <script>
+        // Jam Realtime
+        function updateClock() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('id-ID');
+            document.getElementById('clock').innerText = timeString;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // Cek Status Mesin Realtime
+        async function checkStatus() {
+            try {
+                const res = await fetch('/api/machine-status');
+                const data = await res.json();
+                const statusEl = document.getElementById('machine-status');
+                if (data.status === 'Online') {
+                    statusEl.innerHTML = '<span class="status-online">Online (Terhubung)</span>';
+                } else {
+                    statusEl.innerHTML = '<span class="status-offline">Offline (Tidak Terhubung)</span>';
+                }
+            } catch (err) {
+                document.getElementById('machine-status').innerHTML = '<span class="status-offline">Offline / Error</span>';
+            }
+        }
+        setInterval(checkStatus, 15000); // Tiap 15 detik
+        checkStatus();
+
+        // Tarik Data Mesin
+        async function syncMachine() {
+            alert('Proses penarikan data dari mesin dimulai, harap tunggu...');
+            try {
+                const res = await fetch('/api/sync-machine');
+                const data = await res.json();
+                alert(data.message);
+                if(data.success) {
+                    location.reload();
+                }
+            } catch (err) {
+                alert('Terjadi kesalahan saat menarik data.');
+            }
+        }
+    </script>
 </body>
 </html>
