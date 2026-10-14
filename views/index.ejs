@@ -63,6 +63,66 @@
             border-left: 5px solid var(--primary-yellow);
             padding-left: 12px;
         }
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .section-header h2 {
+            margin-bottom: 0;
+        }
+        .search-box {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .search-box input[type="text"] {
+            padding: 9px 14px;
+            font-size: 14px;
+            border: 1.5px solid #cbd5e1;
+            border-radius: 8px;
+            outline: none;
+            min-width: 230px;
+            color: var(--text-dark);
+            transition: all 0.2s ease;
+        }
+        .search-box input[type="text"]:focus {
+            border-color: var(--secondary-blue);
+            box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.15);
+        }
+        .btn-search {
+            padding: 9px 16px;
+            font-size: 14px;
+            font-weight: 700;
+            background: var(--primary-blue);
+            color: var(--primary-yellow);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .btn-search:hover {
+            background: var(--secondary-blue);
+            transform: translateY(-1px);
+        }
+        .btn-reset-search {
+            padding: 9px 12px;
+            font-size: 13px;
+            font-weight: 600;
+            background: #e2e8f0;
+            color: var(--text-dark);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .btn-reset-search:hover {
+            background: #cbd5e1;
+        }
         .nav {
             display: flex;
             justify-content: space-between;
@@ -400,6 +460,18 @@
             h2 {
                 font-size: 18px;
             }
+            .section-header {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .search-box {
+                width: 100%;
+            }
+            .search-box input[type="text"] {
+                flex: 1;
+                min-width: 0;
+                width: 100%;
+            }
             .nav {
                 flex-direction: column;
                 align-items: stretch;
@@ -497,7 +569,15 @@
             </div>
         </div>
         
-        <h2>Log Absen Karyawan</h2>
+        <div class="section-header">
+            <h2>Log Absen Karyawan</h2>
+            <form class="search-box" onsubmit="handleSearch(event)">
+                <input type="text" id="search-input" name="search" placeholder="Cari nama karyawan..." value="<%= typeof searchQuery !== 'undefined' ? searchQuery : '' %>" oninput="onSearchInput()">
+                <button type="submit" class="btn-search">Cari</button>
+                <button type="button" id="btn-reset-search" class="btn-reset-search" onclick="resetSearch()" style="display: <%= (typeof searchQuery !== 'undefined' && searchQuery) ? 'inline-block' : 'none' %>;">Reset</button>
+            </form>
+        </div>
+
         <div class="table-container">
             <table>
                 <thead>
@@ -532,12 +612,13 @@
         </div>
 
         <div class="pagination" id="pagination-controls">
+            <% const searchParamStr = (typeof searchQuery !== 'undefined' && searchQuery) ? '&search=' + encodeURIComponent(searchQuery) : ''; %>
             <% if (currentPage > 1) { %>
-                <a href="/?page=<%= currentPage - 1 %>" class="page-btn" data-page="<%= currentPage - 1 %>" onclick="changePage(<%= currentPage - 1 %>, event)" title="Halaman Sebelumnya">&larr;</a>
+                <a href="/?page=<%= currentPage - 1 %><%= searchParamStr %>" class="page-btn" data-page="<%= currentPage - 1 %>" onclick="changePage(<%= currentPage - 1 %>, event)" title="Halaman Sebelumnya">&larr;</a>
             <% } %>
             <span class="page-info" id="page-info">Halaman <%= currentPage %> dari <%= totalPages %></span>
             <% if (currentPage < totalPages) { %>
-                <a href="/?page=<%= currentPage + 1 %>" class="page-btn" data-page="<%= currentPage + 1 %>" onclick="changePage(<%= currentPage + 1 %>, event)" title="Halaman Selanjutnya">&rarr;</a>
+                <a href="/?page=<%= currentPage + 1 %><%= searchParamStr %>" class="page-btn" data-page="<%= currentPage + 1 %>" onclick="changePage(<%= currentPage + 1 %>, event)" title="Halaman Selanjutnya">&rarr;</a>
             <% } %>
         </div>
     </div>
@@ -557,6 +638,8 @@
 
     <script>
         let currentActivePage = <%= currentPage || 1 %>;
+        let currentSearchQuery = <%- JSON.stringify(typeof searchQuery !== 'undefined' ? searchQuery : '') %>;
+        let searchDebounceTimer = null;
 
         // Jam Realtime dengan Tanggal
         function updateClock() {
@@ -587,29 +670,93 @@
         setInterval(checkStatus, 10000); // Tiap 10 detik
         checkStatus();
 
+        // Fitur Pencarian Nama Karyawan
+        function handleSearch(event) {
+            if (event) event.preventDefault();
+            if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+            const inputEl = document.getElementById('search-input');
+            currentSearchQuery = (inputEl ? inputEl.value : '').trim();
+            currentActivePage = 1;
+            updateResetButton();
+            updateBrowserUrl(1, currentSearchQuery);
+            refreshDashboardStats(1, currentSearchQuery);
+        }
+
+        function onSearchInput() {
+            updateResetButton();
+            if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+            searchDebounceTimer = setTimeout(() => {
+                const inputEl = document.getElementById('search-input');
+                currentSearchQuery = (inputEl ? inputEl.value : '').trim();
+                currentActivePage = 1;
+                updateBrowserUrl(1, currentSearchQuery);
+                refreshDashboardStats(1, currentSearchQuery);
+            }, 300);
+        }
+
+        function resetSearch() {
+            const inputEl = document.getElementById('search-input');
+            if (inputEl) inputEl.value = '';
+            currentSearchQuery = '';
+            currentActivePage = 1;
+            updateResetButton();
+            updateBrowserUrl(1, '');
+            refreshDashboardStats(1, '');
+        }
+
+        function updateResetButton() {
+            const inputEl = document.getElementById('search-input');
+            const resetBtn = document.getElementById('btn-reset-search');
+            if (!resetBtn) return;
+            const hasVal = inputEl && inputEl.value.trim().length > 0;
+            resetBtn.style.display = hasVal ? 'inline-block' : 'none';
+        }
+
+        function updateBrowserUrl(pageNum, searchStr) {
+            const params = new URLSearchParams();
+            params.set('page', pageNum);
+            if (searchStr && searchStr.trim()) {
+                params.set('search', searchStr.trim());
+            }
+            const newUrl = window.location.pathname + '?' + params.toString();
+            window.history.pushState({ page: pageNum, search: searchStr }, '', newUrl);
+        }
+
         // Navigasi Pagination via AJAX/Fetch API tanpa refresh halaman
         async function changePage(targetPage, event) {
             if (event) event.preventDefault();
             const pageNum = Math.max(1, parseInt(targetPage) || 1);
             currentActivePage = pageNum;
-            const newUrl = window.location.pathname + '?page=' + pageNum;
-            window.history.pushState({ page: pageNum }, '', newUrl);
-            await refreshDashboardStats(pageNum);
+            updateBrowserUrl(pageNum, currentSearchQuery);
+            await refreshDashboardStats(pageNum, currentSearchQuery);
         }
 
         window.addEventListener('popstate', (event) => {
             const urlParams = new URLSearchParams(window.location.search);
             const page = parseInt(urlParams.get('page')) || 1;
+            const search = urlParams.get('search') || '';
             currentActivePage = page;
-            refreshDashboardStats(page);
+            currentSearchQuery = search;
+            const inputEl = document.getElementById('search-input');
+            if (inputEl) inputEl.value = search;
+            updateResetButton();
+            refreshDashboardStats(page, search);
         });
 
         // Refresh Data Dashboard (Tanpa reload halaman)
-        async function refreshDashboardStats(overridePage) {
+        async function refreshDashboardStats(overridePage, overrideSearch) {
             try {
                 const urlParams = new URLSearchParams(window.location.search);
                 const page = overridePage || parseInt(urlParams.get('page')) || currentActivePage || 1;
-                const res = await fetch('/api/dashboard-summary?page=' + page);
+                const search = overrideSearch !== undefined ? overrideSearch : (urlParams.get('search') !== null ? urlParams.get('search') : currentSearchQuery);
+
+                const queryParams = new URLSearchParams();
+                queryParams.set('page', page);
+                if (search && search.trim()) {
+                    queryParams.set('search', search.trim());
+                }
+
+                const res = await fetch('/api/dashboard-summary?' + queryParams.toString());
                 const data = await res.json();
                 currentActivePage = data.currentPage || page;
                 
@@ -628,7 +775,10 @@
                     });
                     tbody.innerHTML = html;
                 } else {
-                    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Belum ada data absensi.</td></tr>';
+                    const emptyMsg = (search && search.trim())
+                        ? `Tidak ada data absensi untuk karyawan "${search.trim()}".`
+                        : 'Belum ada data absensi.';
+                    tbody.innerHTML = `<tr><td colspan="4" style="text-align: center;">${emptyMsg}</td></tr>`;
                 }
 
                 // Update Total Karyawan
@@ -636,13 +786,14 @@
 
                 // Update Link Pagination dengan simbol panah & AJAX handler
                 const paginationControls = document.getElementById('pagination-controls');
+                const searchSuffix = (search && search.trim()) ? '&search=' + encodeURIComponent(search.trim()) : '';
                 let phtml = '';
                 if (data.currentPage > 1) {
-                    phtml += `<a href="/?page=${data.currentPage - 1}" class="page-btn" data-page="${data.currentPage - 1}" onclick="changePage(${data.currentPage - 1}, event)" title="Halaman Sebelumnya">&larr;</a> `;
+                    phtml += `<a href="/?page=${data.currentPage - 1}${searchSuffix}" class="page-btn" data-page="${data.currentPage - 1}" onclick="changePage(${data.currentPage - 1}, event)" title="Halaman Sebelumnya">&larr;</a> `;
                 }
                 phtml += `<span class="page-info" id="page-info">Halaman ${data.currentPage} dari ${data.totalPages}</span> `;
                 if (data.currentPage < data.totalPages) {
-                    phtml += `<a href="/?page=${data.currentPage + 1}" class="page-btn" data-page="${data.currentPage + 1}" onclick="changePage(${data.currentPage + 1}, event)" title="Halaman Selanjutnya">&rarr;</a>`;
+                    phtml += `<a href="/?page=${data.currentPage + 1}${searchSuffix}" class="page-btn" data-page="${data.currentPage + 1}" onclick="changePage(${data.currentPage + 1}, event)" title="Halaman Selanjutnya">&rarr;</a>`;
                 }
                 paginationControls.innerHTML = phtml;
 
