@@ -100,6 +100,11 @@
             gap: 12px;
             margin-bottom: 16px;
         }
+        
+        .header-actions {
+            display: flex;
+            gap: 10px;
+        }
 
         .btn-open-modal {
             padding: 10px 20px;
@@ -118,6 +123,26 @@
         }
         .btn-open-modal:hover {
             background-color: #ffb300;
+            transform: translateY(-1px);
+        }
+        
+        .btn-upload {
+            padding: 10px 20px;
+            background-color: var(--secondary-blue);
+            color: var(--white);
+            cursor: pointer;
+            border: none;
+            font-weight: 700;
+            border-radius: 8px;
+            font-size: 15px;
+            transition: all 0.2s ease;
+            box-shadow: 0 3px 8px rgba(13, 71, 161, 0.15);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-upload:hover {
+            background-color: var(--primary-blue);
             transform: translateY(-1px);
         }
 
@@ -285,6 +310,103 @@
             background-color: #ffb300;
         }
 
+        /* Checkbox Styling */
+        input[type="checkbox"].karyawan-checkbox, #checkAll {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            accent-color: var(--primary-blue);
+        }
+        
+        /* Modal Upload Progress */
+        body.upload-locked {
+            overflow: hidden !important;
+            pointer-events: none;
+        }
+        body.upload-locked .upload-overlay {
+            pointer-events: all;
+        }
+        .upload-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(13, 71, 161, 0.75);
+            backdrop-filter: blur(4px);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 99999;
+            user-select: none;
+            padding: 16px;
+        }
+        .upload-overlay.active {
+            display: flex;
+        }
+        .upload-modal {
+            background: var(--white);
+            padding: 32px;
+            border-radius: 16px;
+            width: 100%;
+            max-width: 450px;
+            text-align: center;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.3);
+            border-top: 6px solid var(--primary-yellow);
+        }
+        .upload-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--primary-blue);
+            margin-bottom: 10px;
+        }
+        .upload-status-text {
+            font-size: 15px;
+            color: var(--text-muted);
+            margin-bottom: 20px;
+            min-height: 44px;
+        }
+        .progress-container {
+            width: 100%;
+            background-color: #e2e8f0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 15px;
+            height: 24px;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background-color: var(--secondary-blue);
+            transition: width 0.3s ease;
+            background-image: linear-gradient(45deg,rgba(255,193,7,.35) 25%,transparent 25%,transparent 50%,rgba(255,193,7,.35) 50%,rgba(255,193,7,.35) 75%,transparent 75%,transparent);
+            background-size: 1rem 1rem;
+            animation: progress-bar-stripes 1s linear infinite;
+        }
+        @keyframes progress-bar-stripes {
+            from { background-position: 1rem 0; }
+            to { background-position: 0 0; }
+        }
+        .progress-percentage {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--primary-blue);
+        }
+        .btn-close-upload {
+            display: none;
+            margin-top: 20px;
+            background-color: var(--primary-blue);
+            color: var(--primary-yellow);
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .btn-close-upload:hover { background-color: var(--secondary-blue); }
+
         /* Media Queries untuk Mobile & Tablet */
         @media (max-width: 768px) {
             body {
@@ -302,7 +424,10 @@
                 flex-direction: column;
                 align-items: stretch;
             }
-            .btn-open-modal {
+            .header-actions {
+                flex-direction: column;
+            }
+            .btn-open-modal, .btn-upload {
                 width: 100%;
                 justify-content: center;
             }
@@ -339,13 +464,20 @@
         
         <div class="header-bar">
             <h2>Daftar Karyawan</h2>
-            <button type="button" class="btn-open-modal" onclick="openAddModal()">+ Tambah Karyawan</button>
+            <div class="header-actions">
+                <button type="button" class="btn-upload" onclick="uploadSelected()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                    Upload Data ke Mesin
+                </button>
+                <button type="button" class="btn-open-modal" onclick="openAddModal()">+ Tambah Karyawan</button>
+            </div>
         </div>
 
         <div class="table-responsive">
             <table>
                 <thead>
                     <tr>
+                        <th style="width: 50px; text-align: center;"><input type="checkbox" id="checkAll" onchange="toggleCheckAll()"></th>
                         <th>ID</th>
                         <th>Nama</th>
                         <th>Jabatan/Bagian</th>
@@ -356,6 +488,9 @@
                     <% if (karyawan.length > 0) { %>
                         <% karyawan.forEach(k => { %>
                             <tr>
+                                <td style="text-align: center;">
+                                    <input type="checkbox" class="karyawan-checkbox" value="<%= k.uid %>" data-nama="<%= k.nama %>">
+                                </td>
                                 <td><%= k.uid %></td>
                                 <td><strong><%= k.nama %></strong></td>
                                 <td><%= k.jabatan || '-' %></td>
@@ -367,7 +502,7 @@
                         <% }) %>
                     <% } else { %>
                         <tr>
-                            <td colspan="4" style="text-align: center;">Belum ada data karyawan.</td>
+                            <td colspan="5" style="text-align: center;">Belum ada data karyawan.</td>
                         </tr>
                     <% } %>
                 </tbody>
@@ -399,6 +534,19 @@
         </div>
     </div>
 
+    <!-- Overlay Loading Bar Upload -->
+    <div id="upload-overlay" class="upload-overlay">
+        <div class="upload-modal">
+            <div class="upload-title" id="upload-title">Mengupload Data ke Mesin...</div>
+            <div class="progress-container">
+                <div id="upload-progress-bar" class="progress-bar"></div>
+            </div>
+            <div id="upload-progress-text" class="progress-percentage">0%</div>
+            <div class="upload-status-text" id="upload-status-text">Memulai proses...</div>
+            <button id="btn-close-upload" class="btn-close-upload" onclick="closeUploadModal()">Tutup</button>
+        </div>
+    </div>
+
     <script>
         function openAddModal() {
             const modal = document.getElementById('add-karyawan-modal');
@@ -422,7 +570,104 @@
             if (e.key === 'Escape') {
                 closeAddModal();
             }
-        });
+            if (document.body.classList.contains('upload-locked')) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        }, true);
+        
+        function toggleCheckAll() {
+            const checkAll = document.getElementById('checkAll');
+            const checkboxes = document.querySelectorAll('.karyawan-checkbox');
+            checkboxes.forEach(cb => cb.checked = checkAll.checked);
+        }
+        
+        async function uploadSelected() {
+            const checkboxes = document.querySelectorAll('.karyawan-checkbox:checked');
+            if (checkboxes.length === 0) {
+                alert('Silakan centang setidaknya satu karyawan untuk diupload!');
+                return;
+            }
+            
+            const selectedUsers = Array.from(checkboxes).map(cb => ({
+                uid: cb.value,
+                nama: cb.getAttribute('data-nama')
+            }));
+            
+            // Kunci UI dan tampilkan modal
+            document.body.classList.add('upload-locked');
+            document.getElementById('upload-overlay').classList.add('active');
+            document.getElementById('btn-close-upload').style.display = 'none';
+            document.getElementById('upload-title').innerText = 'Mengupload Data ke Mesin...';
+            
+            updateUploadProgress(5, 'Menghubungkan ke server...');
+            
+            try {
+                const response = await fetch('/api/upload-karyawan', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ users: selectedUsers })
+                });
+                
+                // Gunakan reader agar bisa update progress bar per baris JSON
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let buffer = '';
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop(); // simpan sisa potongan JSON ke buffer
+                    
+                    for (const line of lines) {
+                        if (line.trim() !== '') {
+                            try {
+                                const data = JSON.parse(line);
+                                if (data.status === 'running') {
+                                    updateUploadProgress(data.progress, data.message);
+                                } else if (data.status === 'completed') {
+                                    updateUploadProgress(100, data.message);
+                                    document.getElementById('btn-close-upload').style.display = 'block';
+                                } else if (data.status === 'error') {
+                                    updateUploadProgress(100, data.message, true);
+                                    document.getElementById('btn-close-upload').style.display = 'block';
+                                    document.getElementById('upload-title').innerText = 'Upload Gagal!';
+                                }
+                            } catch (e) {
+                                console.error('Gagal parse JSON stream:', e);
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                updateUploadProgress(100, 'Terjadi kesalahan: ' + err.message, true);
+                document.getElementById('btn-close-upload').style.display = 'block';
+                document.getElementById('upload-title').innerText = 'Upload Gagal!';
+            }
+        }
+        
+        function updateUploadProgress(progress, message, isError = false) {
+            const bar = document.getElementById('upload-progress-bar');
+            const pct = document.getElementById('upload-progress-text');
+            const status = document.getElementById('upload-status-text');
+            
+            bar.style.width = progress + '%';
+            bar.style.backgroundColor = isError ? '#dc3545' : (progress === 100 ? '#16a34a' : '#1976d2');
+            pct.innerText = progress + '%';
+            pct.style.color = isError ? '#dc3545' : (progress === 100 ? '#16a34a' : '#0d47a1');
+            status.innerText = message;
+        }
+        
+        function closeUploadModal() {
+            document.body.classList.remove('upload-locked');
+            document.getElementById('upload-overlay').classList.remove('active');
+            // Uncheck semua checkbox
+            document.getElementById('checkAll').checked = false;
+            document.querySelectorAll('.karyawan-checkbox').forEach(cb => cb.checked = false);
+        }
     </script>
 </body>
 </html>
