@@ -5,32 +5,279 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistem Absensi Dashboard</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background-color: #f4f7f6; }
-        .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-        h1, h2 { color: #333; text-align: center; }
-        .nav { display: flex; justify-content: space-between; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #ddd; align-items: center; }
-        .nav a { text-decoration: none; color: #007bff; font-weight: bold; margin-left: 15px; }
-        .nav a:hover { text-decoration: underline; }
-        
-        .dashboard-info { display: flex; justify-content: space-between; flex-wrap: wrap; margin-bottom: 20px; }
-        .info-card { background: #e9ecef; padding: 15px; border-radius: 6px; width: 48%; margin-bottom: 10px; box-sizing: border-box; }
-        .info-card h3 { margin: 0 0 10px 0; font-size: 16px; color: #555; }
-        .info-card p { margin: 0; font-size: 18px; font-weight: bold; color: #333; }
-        
-        .status-online { color: green; }
-        .status-offline { color: red; }
-        .status-syncing { color: #d39e00; }
-        
-        form { display: flex; flex-direction: column; gap: 15px; margin-bottom: 30px; padding: 20px; background-color: #f9f9f9; border-radius: 8px; }
-        input, select, button { padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; }
-        button { background-color: #28a745; color: white; cursor: pointer; border: none; font-weight: bold; }
-        button:hover { background-color: #218838; }
-        
-        .table-container { max-height: 500px; overflow-y: auto; border: 1px solid #ddd; margin-bottom: 20px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 0; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
-        th { background-color: #007bff; color: white; position: sticky; top: 0; z-index: 1; }
-        tr:nth-child(even) { background-color: #f2f2f2; }
+        :root {
+            --primary-blue: #0d47a1;
+            --secondary-blue: #1976d2;
+            --light-blue: #e3f2fd;
+            --primary-yellow: #ffc107;
+            --dark-yellow: #ff8f00;
+            --light-yellow: #fff8e1;
+            --text-dark: #1e293b;
+            --text-muted: #64748b;
+            --bg-body: #f0f4f8;
+            --white: #ffffff;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 24px;
+            background: linear-gradient(135deg, #e3f2fd 0%, #fff8e1 100%);
+            min-height: 100vh;
+            color: var(--text-dark);
+        }
+        .container {
+            max-width: 1050px;
+            margin: auto;
+            background: var(--white);
+            padding: 28px;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(13, 71, 161, 0.1);
+            border-top: 6px solid var(--primary-yellow);
+        }
+        h1, h2 {
+            color: var(--primary-blue);
+            text-align: center;
+            margin-top: 0;
+            font-weight: 700;
+        }
+        h1 {
+            font-size: 28px;
+            margin-bottom: 24px;
+            position: relative;
+            padding-bottom: 10px;
+        }
+        h1::after {
+            content: '';
+            display: block;
+            width: 80px;
+            height: 4px;
+            background: var(--primary-yellow);
+            margin: 8px auto 0;
+            border-radius: 2px;
+        }
+        h2 {
+            font-size: 20px;
+            margin-bottom: 16px;
+            text-align: left;
+            border-left: 5px solid var(--primary-yellow);
+            padding-left: 12px;
+        }
+        .nav {
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 28px;
+            padding: 16px 20px;
+            background: linear-gradient(90deg, var(--primary-blue), var(--secondary-blue));
+            border-radius: 12px;
+            color: var(--white);
+            align-items: center;
+            box-shadow: 0 4px 12px rgba(13, 71, 161, 0.18);
+        }
+        .nav strong { color: var(--primary-yellow); }
+        .nav a {
+            text-decoration: none;
+            color: var(--white);
+            font-weight: 600;
+            padding: 8px 14px;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+            background: rgba(255, 255, 255, 0.12);
+        }
+        .nav a:hover {
+            background: var(--primary-yellow);
+            color: var(--primary-blue);
+        }
+        .print-form {
+            display: flex;
+            flex-direction: row;
+            gap: 8px;
+            margin: 0;
+            padding: 6px 10px;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 8px;
+            align-items: center;
+        }
+        .print-form input[type="date"] {
+            padding: 6px 10px;
+            font-size: 13px;
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            border-radius: 6px;
+            background: var(--white);
+            color: var(--text-dark);
+        }
+        .print-form button {
+            padding: 7px 14px;
+            font-size: 13px;
+            background-color: var(--primary-yellow);
+            color: var(--primary-blue);
+            font-weight: 700;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .print-form button:hover {
+            background-color: #ffd54f;
+            transform: translateY(-1px);
+        }
+
+        .dashboard-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 18px;
+            margin-bottom: 30px;
+        }
+        .info-card {
+            background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+            padding: 18px;
+            border-radius: 12px;
+            border: 1px solid #dbeafe;
+            border-left: 5px solid var(--secondary-blue);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.03);
+            transition: transform 0.2s ease;
+        }
+        .info-card:nth-child(even) {
+            border-left-color: var(--primary-yellow);
+        }
+        .info-card:hover {
+            transform: translateY(-2px);
+        }
+        .info-card h3 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+        }
+        .info-card p {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--primary-blue);
+        }
+
+        .status-online { color: #16a34a; }
+        .status-offline { color: #dc2626; }
+        .status-syncing { color: var(--dark-yellow); }
+
+        .btn-sync {
+            width: 100%;
+            padding: 10px 12px;
+            font-size: 14px;
+            font-weight: 700;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        .btn-sync-karyawan {
+            background: var(--secondary-blue);
+            color: var(--white);
+            margin-bottom: 8px;
+        }
+        .btn-sync-karyawan:hover {
+            background: var(--primary-blue);
+        }
+        .btn-sync-absensi {
+            background: var(--primary-yellow);
+            color: var(--primary-blue);
+        }
+        .btn-sync-absensi:hover {
+            background: #ffb300;
+        }
+
+        .table-container {
+            max-height: 520px;
+            overflow-y: auto;
+            border: 1px solid #cbd5e1;
+            border-radius: 12px;
+            margin-bottom: 22px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 0;
+        }
+        th, td {
+            padding: 14px 16px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        th {
+            background: linear-gradient(90deg, var(--primary-blue), var(--secondary-blue));
+            color: var(--primary-yellow);
+            font-weight: 700;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            letter-spacing: 0.3px;
+        }
+        tr:nth-child(even) { background-color: #f8fafc; }
+        tr:hover { background-color: var(--light-yellow); }
+
+        .badge-status {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .badge-masuk {
+            background-color: var(--light-blue);
+            color: var(--primary-blue);
+            border: 1px solid #90caf9;
+        }
+        .badge-pulang {
+            background-color: var(--light-yellow);
+            color: #b45309;
+            border: 1px solid #ffe082;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 10px;
+        }
+        .page-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 42px;
+            height: 42px;
+            background: var(--primary-blue);
+            color: var(--primary-yellow);
+            text-decoration: none;
+            border-radius: 10px;
+            font-size: 20px;
+            font-weight: bold;
+            border: 2px solid var(--primary-yellow);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 3px 8px rgba(13, 71, 161, 0.2);
+        }
+        .page-btn:hover {
+            background: var(--primary-yellow);
+            color: var(--primary-blue);
+            transform: translateY(-2px);
+        }
+        .page-info {
+            font-weight: 700;
+            color: var(--primary-blue);
+            background: var(--light-yellow);
+            padding: 8px 18px;
+            border-radius: 10px;
+            border: 1px solid var(--primary-yellow);
+        }
 
         /* Modal / Overlay untuk Loading Bar Sinkronisasi */
         body.sync-locked {
@@ -40,14 +287,13 @@
         body.sync-locked .sync-overlay {
             pointer-events: all;
         }
-        
         .sync-overlay {
             position: fixed;
             top: 0;
             left: 0;
             width: 100vw;
             height: 100vh;
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(13, 71, 161, 0.75);
             backdrop-filter: blur(4px);
             display: none;
             justify-content: center;
@@ -59,41 +305,42 @@
             display: flex;
         }
         .sync-modal {
-            background: white;
-            padding: 30px;
-            border-radius: 8px;
+            background: var(--white);
+            padding: 32px;
+            border-radius: 16px;
             width: 90%;
             max-width: 450px;
             text-align: center;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            box-shadow: 0 12px 30px rgba(0,0,0,0.3);
+            border-top: 6px solid var(--primary-yellow);
         }
         .sync-title {
             font-size: 22px;
-            font-weight: bold;
-            color: #333;
+            font-weight: 700;
+            color: var(--primary-blue);
             margin-bottom: 10px;
         }
         .sync-status-text {
-            font-size: 16px;
-            color: #666;
+            font-size: 15px;
+            color: var(--text-muted);
             margin-bottom: 20px;
-            min-height: 48px;
+            min-height: 44px;
         }
         .progress-container {
             width: 100%;
-            background-color: #e9ecef;
-            border-radius: 6px;
+            background-color: #e2e8f0;
+            border-radius: 10px;
             overflow: hidden;
             margin-bottom: 15px;
-            height: 25px;
-            box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
+            height: 24px;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
         }
         .progress-bar {
             height: 100%;
             width: 0%;
-            background-color: #007bff;
+            background-color: var(--secondary-blue);
             transition: width 0.3s ease;
-            background-image: linear-gradient(45deg,rgba(255,255,255,.15) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.15) 50%,rgba(255,255,255,.15) 75%,transparent 75%,transparent);
+            background-image: linear-gradient(45deg,rgba(255,193,7,.35) 25%,transparent 25%,transparent 50%,rgba(255,193,7,.35) 50%,rgba(255,193,7,.35) 75%,transparent 75%,transparent);
             background-size: 1rem 1rem;
             animation: progress-bar-stripes 1s linear infinite;
         }
@@ -103,16 +350,22 @@
         }
         .progress-percentage {
             font-size: 18px;
-            font-weight: bold;
-            color: #007bff;
+            font-weight: 700;
+            color: var(--primary-blue);
         }
         .btn-close-modal {
             display: none;
             margin-top: 20px;
-            background-color: #6c757d;
+            background-color: var(--primary-blue);
+            color: var(--primary-yellow);
             width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 700;
+            cursor: pointer;
         }
-        .btn-close-modal:hover { background-color: #5a6268; }
+        .btn-close-modal:hover { background-color: var(--secondary-blue); }
     </style>
 </head>
 <body>
@@ -121,14 +374,14 @@
             <div>
                 <strong>Login sebagai:</strong> <%= admin %>
             </div>
-            <div style="display: flex; align-items: center; gap: 15px;">
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
                 <a href="/">Dashboard</a>
                 <a href="/karyawan">Kelola Karyawan</a>
-                <form action="/print" method="GET" target="_blank" style="display: flex; flex-direction: row; gap: 5px; margin: 0; padding: 0; background: transparent; border: none; align-items: center; margin-left: 15px;">
-                    <input type="date" name="start" required style="padding: 4px; font-size: 14px;">
-                    <span style="font-size: 14px; font-weight: bold;">s/d</span>
-                    <input type="date" name="end" required style="padding: 4px; font-size: 14px;">
-                    <button type="submit" style="padding: 5px 10px; font-size: 14px; background-color: #007bff;">Cetak Laporan</button>
+                <form class="print-form" action="/print" method="GET" target="_blank">
+                    <input type="date" name="start" required>
+                    <span style="font-size: 13px; font-weight: bold; color: var(--primary-yellow);">s/d</span>
+                    <input type="date" name="end" required>
+                    <button type="submit">Cetak Laporan</button>
                 </form>
             </div>
         </div>
@@ -150,8 +403,8 @@
             </div>
             <div class="info-card">
                 <h3>Sinkronisasi Manual (Incremental)</h3>
-                <button type="button" onclick="startSync('karyawan')" style="width: 100%; padding: 8px; font-size:14px; background: #17a2b8; margin-bottom: 8px;">Tarik Data Karyawan</button>
-                <button type="button" onclick="startSync('absensi')" style="width: 100%; padding: 8px; font-size:14px; background: #28a745;">Tarik Data Absensi</button>
+                <button type="button" class="btn-sync btn-sync-karyawan" onclick="startSync('karyawan')">Download Data Karyawan</button>
+                <button type="button" class="btn-sync btn-sync-absensi" onclick="startSync('absensi')">Download Data Absensi</button>
             </div>
         </div>
         
@@ -171,9 +424,13 @@
                         <% data.forEach(row => { %>
                             <tr>
                                 <td><%= row.id %></td>
-                                <td><%= row.nama || 'Tidak Diketahui' %></td>
+                                <td><strong><%= row.nama || 'Tidak Diketahui' %></strong></td>
                                 <td><%= row.waktu %></td>
-                                <td><%= row.status %></td>
+                                <td>
+                                    <span class="badge-status <%= row.status === 'Masuk' ? 'badge-masuk' : 'badge-pulang' %>">
+                                        <%= row.status %>
+                                    </span>
+                                </td>
                             </tr>
                         <% }) %>
                     <% } else { %>
@@ -185,13 +442,13 @@
             </table>
         </div>
 
-        <div class="pagination" id="pagination-controls" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 20px;">
+        <div class="pagination" id="pagination-controls">
             <% if (currentPage > 1) { %>
-                <a href="/?page=<%= currentPage - 1 %>" style="padding: 8px 12px; background: #007bff; color: white; text-decoration: none; border-radius: 4px;">Sebelumnya</a>
+                <a href="/?page=<%= currentPage - 1 %>" class="page-btn" data-page="<%= currentPage - 1 %>" onclick="changePage(<%= currentPage - 1 %>, event)" title="Halaman Sebelumnya">&larr;</a>
             <% } %>
-            <span style="font-weight: bold;" id="page-info">Halaman <%= currentPage %> dari <%= totalPages %></span>
+            <span class="page-info" id="page-info">Halaman <%= currentPage %> dari <%= totalPages %></span>
             <% if (currentPage < totalPages) { %>
-                <a href="/?page=<%= currentPage + 1 %>" style="padding: 8px 12px; background: #007bff; color: white; text-decoration: none; border-radius: 4px;">Selanjutnya</a>
+                <a href="/?page=<%= currentPage + 1 %>" class="page-btn" data-page="<%= currentPage + 1 %>" onclick="changePage(<%= currentPage + 1 %>, event)" title="Halaman Selanjutnya">&rarr;</a>
             <% } %>
         </div>
     </div>
@@ -199,7 +456,7 @@
     <!-- Overlay Loading Bar Sinkronisasi -->
     <div id="sync-overlay" class="sync-overlay">
         <div class="sync-modal">
-            <div class="sync-title" id="sync-title">Menarik Data...</div>
+            <div class="sync-title" id="sync-title">Mendownload Data...</div>
             <div class="progress-container">
                 <div id="sync-progress-bar" class="progress-bar"></div>
             </div>
@@ -210,6 +467,8 @@
     </div>
 
     <script>
+        let currentActivePage = <%= currentPage || 1 %>;
+
         // Jam Realtime dengan Tanggal
         function updateClock() {
             const now = new Date();
@@ -239,24 +498,43 @@
         setInterval(checkStatus, 10000); // Tiap 10 detik
         checkStatus();
 
+        // Navigasi Pagination via AJAX/Fetch API tanpa refresh halaman
+        async function changePage(targetPage, event) {
+            if (event) event.preventDefault();
+            const pageNum = Math.max(1, parseInt(targetPage) || 1);
+            currentActivePage = pageNum;
+            const newUrl = window.location.pathname + '?page=' + pageNum;
+            window.history.pushState({ page: pageNum }, '', newUrl);
+            await refreshDashboardStats(pageNum);
+        }
+
+        window.addEventListener('popstate', (event) => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const page = parseInt(urlParams.get('page')) || 1;
+            currentActivePage = page;
+            refreshDashboardStats(page);
+        });
+
         // Refresh Data Dashboard (Tanpa reload halaman)
-        async function refreshDashboardStats() {
+        async function refreshDashboardStats(overridePage) {
             try {
                 const urlParams = new URLSearchParams(window.location.search);
-                const page = urlParams.get('page') || 1;
+                const page = overridePage || parseInt(urlParams.get('page')) || currentActivePage || 1;
                 const res = await fetch('/api/dashboard-summary?page=' + page);
                 const data = await res.json();
+                currentActivePage = data.currentPage || page;
                 
                 // Update Tabel
                 const tbody = document.getElementById('absensi-table-body');
                 if (data.rows && data.rows.length > 0) {
                     let html = '';
                     data.rows.forEach(row => {
+                        const badgeClass = row.status === 'Masuk' ? 'badge-masuk' : 'badge-pulang';
                         html += `<tr>
                             <td>${row.id}</td>
-                            <td>${row.nama || 'Tidak Diketahui'}</td>
+                            <td><strong>${row.nama || 'Tidak Diketahui'}</strong></td>
                             <td>${row.waktu}</td>
-                            <td>${row.status}</td>
+                            <td><span class="badge-status ${badgeClass}">${row.status}</span></td>
                         </tr>`;
                     });
                     tbody.innerHTML = html;
@@ -267,18 +545,15 @@
                 // Update Total Karyawan
                 document.getElementById('total-karyawan-count').innerText = data.totalKaryawan || 0;
 
-                // Update Pagination Info
-                document.getElementById('page-info').innerText = `Halaman ${data.currentPage} dari ${data.totalPages}`;
-                
-                // Update Link Pagination
+                // Update Link Pagination dengan simbol panah & AJAX handler
                 const paginationControls = document.getElementById('pagination-controls');
                 let phtml = '';
                 if (data.currentPage > 1) {
-                    phtml += `<a href="/?page=${data.currentPage - 1}" style="padding: 8px 12px; background: #007bff; color: white; text-decoration: none; border-radius: 4px;">Sebelumnya</a> `;
+                    phtml += `<a href="/?page=${data.currentPage - 1}" class="page-btn" data-page="${data.currentPage - 1}" onclick="changePage(${data.currentPage - 1}, event)" title="Halaman Sebelumnya">&larr;</a> `;
                 }
-                phtml += `<span style="font-weight: bold;" id="page-info">Halaman ${data.currentPage} dari ${data.totalPages}</span> `;
+                phtml += `<span class="page-info" id="page-info">Halaman ${data.currentPage} dari ${data.totalPages}</span> `;
                 if (data.currentPage < data.totalPages) {
-                    phtml += `<a href="/?page=${data.currentPage + 1}" style="padding: 8px 12px; background: #007bff; color: white; text-decoration: none; border-radius: 4px;">Selanjutnya</a>`;
+                    phtml += `<a href="/?page=${data.currentPage + 1}" class="page-btn" data-page="${data.currentPage + 1}" onclick="changePage(${data.currentPage + 1}, event)" title="Halaman Selanjutnya">&rarr;</a>`;
                 }
                 paginationControls.innerHTML = phtml;
 
@@ -304,7 +579,7 @@
             document.body.classList.add('sync-locked');
             document.getElementById('sync-overlay').classList.add('active');
             document.getElementById('btn-close-modal').style.display = 'none';
-            document.getElementById('sync-title').innerText = type === 'karyawan' ? 'Tarik Data Karyawan' : 'Tarik Data Absensi';
+            document.getElementById('sync-title').innerText = type === 'karyawan' ? 'Download Data Karyawan' : 'Download Data Absensi';
             updateProgressBar(0, 'Menghubungkan ke server...');
 
             try {
@@ -330,9 +605,9 @@
             const status = document.getElementById('sync-status-text');
 
             bar.style.width = progress + '%';
-            bar.style.backgroundColor = isError ? '#dc3545' : (progress === 100 ? '#28a745' : '#007bff');
+            bar.style.backgroundColor = isError ? '#dc3545' : (progress === 100 ? '#16a34a' : '#1976d2');
             pct.innerText = progress + '%';
-            pct.style.color = isError ? '#dc3545' : (progress === 100 ? '#28a745' : '#007bff');
+            pct.style.color = isError ? '#dc3545' : (progress === 100 ? '#16a34a' : '#0d47a1');
             status.innerText = message;
         }
 
@@ -392,7 +667,7 @@
                     // Lanjutkan tampilan sync
                     document.body.classList.add('sync-locked');
                     document.getElementById('sync-overlay').classList.add('active');
-                    document.getElementById('sync-title').innerText = state.type === 'karyawan' ? 'Tarik Data Karyawan' : 'Tarik Data Absensi';
+                    document.getElementById('sync-title').innerText = state.type === 'karyawan' ? 'Download Data Karyawan' : 'Download Data Absensi';
                     updateProgressBar(state.progress, state.message);
                     syncPollInterval = setInterval(pollSyncStatus, 250);
                 }
