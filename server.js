@@ -56,6 +56,14 @@ app.get('/', (req, res) => {
     });
 });
 
+// API Get Latest Absensi (Realtime Update)
+app.get('/api/latest-absensi', (req, res) => {
+    db.all('SELECT * FROM absensi ORDER BY waktu DESC LIMIT 10', [], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows);
+    });
+});
+
 // Manual Absensi 
 app.post('/absen', (req, res) => {
     const { nama, status } = req.body;
@@ -124,7 +132,7 @@ app.get('/print', (req, res) => {
 
 // Sync from Machine (ZKTeco / Solution)
 app.get('/api/sync-machine', async (req, res) => {
-    const ip = req.query.ip || '192.168.1.201'; // IP Mesin
+    const ip = req.query.ip || '192.168.0.11'; // IP Mesin Updated
     const zkInstance = new ZKLib(ip, 4370, 10000, 4000);
     try {
         await zkInstance.createSocket();
@@ -154,7 +162,7 @@ app.get('/api/sync-machine', async (req, res) => {
 
 // Cek Status Mesin
 app.get('/api/machine-status', async (req, res) => {
-    const ip = req.query.ip || '192.168.1.201';
+    const ip = req.query.ip || '192.168.0.11';
     const zkInstance = new ZKLib(ip, 4370, 3000, 3000);
     try {
         await zkInstance.createSocket();
@@ -166,5 +174,5 @@ app.get('/api/machine-status', async (req, res) => {
 });
 
 app.listen(port, () => {
-    console.log(\`Server berjalan di http://localhost:\${port}\`);
+    console.log(`Server berjalan di http://localhost:${port}`);
 });
