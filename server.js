@@ -3,10 +3,29 @@ const sqlite3 = require('sqlite3').verbose();
 const bodyParser = require('body-parser');
 const path = require('path');
 const moment = require('moment');
+const crypto = require('crypto');
 const ZKLib = require('node-zklib');
 
 const app = express();
 const port = process.env.PORT || 3000;
+
+// Penyimpanan session in-memory untuk autentikasi akun
+const sessions = new Map();
+
+function parseCookies(req) {
+    const list = {};
+    const cookieHeader = req.headers.cookie;
+    if (!cookieHeader) return list;
+    cookieHeader.split(';').forEach(cookie => {
+        let [name, ...rest] = cookie.split('=');
+        name = name ? name.trim() : '';
+        if (!name) return;
+        const value = rest.join('=').trim();
+        if (!value) return;
+        list[name] = decodeURIComponent(value);
+    });
+    return list;
+}
 
 // Setup EJS
 app.set('view engine', 'ejs');
@@ -29,6 +48,38 @@ const db = new sqlite3.Database(dbPath, (err) => {
             // Gunakan WAL mode agar operasi baca/tulis tidak saling memblokir (non-blocking)
             db.run(`PRAGMA journal_mode = WAL`);
             db.run(`PRAGMA busy_timeout = 5000`);
+
+            // Table Akun (id, nama, username, password, role)
+            db.run(`CREATE TABLE IF NOT EXISTS akun (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nama TEXT NOT NULL,
+                username TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'admin'
+            )`, () => {
+                // Pastikan kolom role tersedia jika tabel sudah ada sebelumnya
+                db.all(`PRAGMA table_info(akun)`, (pragmaErr, columns) => {
+                    if (!pragmaErr && Array.isArray(columns)) {
+                        const hasRole = columns.some(col => col.name === 'role');
+                        if (!hasRole) {
+                            db.run(`ALTER TABLE akun ADD COLUMN role TEXT NOT NULL DEFAULT 'admin'`);
+                        }
+                    }
+                    // Buat akun default superadmin dan admin jika tabel masih kosong
+                    db.get(`SELECT COUNT(*) as total FROM akun`, (countErr, row) => {
+                        if (!countErr && row && row.total === 0) {
+                            db.run(
+                                `INSERT INTO akun (nama, username, password, role) VALUES (?, ?, ?, ?)`,
+                                ['Super Admin', 'superadmin', 'superadmin123', 'superadmin']
+                            );
+                            db.run(
+                                `INSERT INTO akun (nama, username, password, role) VALUES (?, ?, ?, ?)`,
+                                ['Julio', 'admin', 'admin123', 'admin']
+                            );
+                        }
+                    });
+                });
+            });
 
             // Table Karyawan (uid is the deviceUserId/userId) - Persisten tanpa DROP TABLE
             db.run(`CREATE TABLE IF NOT EXISTS karyawan (
@@ -95,6 +146,139 @@ function yieldEventLoop() {
     return new Promise((resolve) => setImmediate(resolve));
 }
 
+// Middleware Autentikasi Akun
+async function requireAuth(req, res, next) {
+    try {
+        const cookies = parseCookies(req);
+        const token = cookies.session_token;
+        if (!token || !sessions.has(token)) {
+            if (req.path.startsWith('/api/')) {
+                return res.status(401).json({ error: 'Unauthorized' });
+            }
+            return res.redirect('/login');
+        }
+        const sessionData = sessions.get(token);
+        const user = await dbGet(`SELECT id, nama, username, password, role FROM akun WHERE id = ?`, [sessionData.userId]);
+        if (!user) {
+            sessions.delete(token);
+            if (req.path.startsWith('/api/')) {
+                return res.status(401).json({ error: 'Unauthorized' });
+            }
+            return res.redirect('/login');
+        }
+        req.user = user;
+        res.locals.user = user;
+        next();
+    } catch (err) {
+        console.error('Auth error:', err);
+        res.redirect('/login');
+    }
+}
+
+// Routes Login & Logout
+app.get('/login', async (req, res) => {
+    const cookies = parseCookies(req);
+    const token = cookies.session_token;
+    if (token && sessions.has(token)) {
+        const sessionData = sessions.get(token);
+        const user = await dbGet(`SELECT id FROM akun WHERE id = ?`, [sessionData.userId]);
+        if (user) return res.redirect('/');
+    }
+    res.render('login', { error: null });
+});
+
+app.post('/login', async (req, res) => {
+    try {
+        const username = (req.body.username || '').trim();
+        const password = req.body.password || '';
+
+        const user = await dbGet(
+            `SELECT id, nama, username, password, role FROM akun WHERE username = ? AND password = ?`,
+            [username, password]
+        );
+
+        if (!user) {
+            return res.render('login', { error: 'Username atau password salah!' });
+        }
+
+        const token = crypto.randomBytes(32).toString('hex');
+        sessions.set(token, { userId: user.id, createdAt: Date.now() });
+        res.setHeader('Set-Cookie', `session_token=${token}; HttpOnly; Path=/; Max-Age=86400; SameSite=Lax`);
+        res.redirect('/');
+    } catch (err) {
+        console.error('Login error:', err);
+        res.render('login', { error: 'Terjadi kesalahan saat proses login.' });
+    }
+});
+
+app.get('/logout', (req, res) => {
+    const cookies = parseCookies(req);
+    const token = cookies.session_token;
+    if (token) {
+        sessions.delete(token);
+    }
+    res.setHeader('Set-Cookie', `session_token=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax`);
+    res.redirect('/login');
+});
+
+// Proteksi seluruh route di bawah ini dengan login
+app.use(requireAuth);
+
+// Route Update Profil (nama dan password bisa diganti, username tidak bisa diganti)
+app.post('/profile/update', async (req, res) => {
+    try {
+        const nama = (req.body.nama || '').trim();
+        const password = (req.body.password || '').trim();
+
+        if (!nama) {
+            return res.redirect('/?msg=' + encodeURIComponent('Nama tidak boleh kosong!') + '&type=error');
+        }
+
+        if (password) {
+            await dbRun(`UPDATE akun SET nama = ?, password = ? WHERE id = ?`, [nama, password, req.user.id]);
+        } else {
+            await dbRun(`UPDATE akun SET nama = ? WHERE id = ?`, [nama, req.user.id]);
+        }
+
+        res.redirect('/?msg=' + encodeURIComponent('Profil berhasil diperbarui!') + '&type=success');
+    } catch (err) {
+        console.error('Gagal update profil:', err);
+        res.redirect('/?msg=' + encodeURIComponent('Gagal memperbarui profil.') + '&type=error');
+    }
+});
+
+// Route Tambah Admin (Hanya untuk superadmin)
+app.post('/admin/add', async (req, res) => {
+    try {
+        if (req.user.role !== 'superadmin') {
+            return res.redirect('/?msg=' + encodeURIComponent('Akses ditolak! Hanya Superadmin yang dapat menambah admin.') + '&type=error');
+        }
+
+        const nama = (req.body.nama || '').trim();
+        const username = (req.body.username || '').trim();
+        const password = (req.body.password || '').trim();
+
+        if (!nama || !username || !password) {
+            return res.redirect('/?msg=' + encodeURIComponent('Semua kolom wajib diisi!') + '&type=error');
+        }
+
+        const existing = await dbGet(`SELECT id FROM akun WHERE username = ?`, [username]);
+        if (existing) {
+            return res.redirect('/?msg=' + encodeURIComponent('Username sudah digunakan, silakan pilih username lain!') + '&type=error');
+        }
+
+        await dbRun(
+            `INSERT INTO akun (nama, username, password, role) VALUES (?, ?, ?, 'admin')`,
+            [nama, username, password]
+        );
+
+        res.redirect('/?msg=' + encodeURIComponent('Akun Admin baru berhasil ditambahkan!') + '&type=success');
+    } catch (err) {
+        console.error('Gagal menambah admin:', err);
+        res.redirect('/?msg=' + encodeURIComponent('Gagal menambahkan admin.') + '&type=error');
+    }
+});
+
 // State untuk tracking proses sinkronisasi di background (non-blocking)
 const syncState = {
     isSyncing: false,
@@ -140,8 +324,8 @@ const FILTERED_ABSENSI_CTE = `
         FROM DailyStats
         WHERE rn_asc = 1 
            OR (
-               rn_desc = 1 
-               AND (strftime('%s', waktu) - strftime('%s', first_waktu)) >= 3600
+                rn_desc = 1 
+                AND (strftime('%s', waktu) - strftime('%s', first_waktu)) >= 3600
            )
     )
 `;
@@ -263,6 +447,8 @@ app.get('/', async (req, res) => {
         const limit = 50;
         const offset = (page - 1) * limit;
         const search = req.query.search || '';
+        const msg = req.query.msg || '';
+        const msgType = req.query.type || 'success';
 
         const { listSql, countSql, searchParam, searchTerm } = buildAbsensiQuery(search);
 
@@ -276,11 +462,16 @@ app.get('/', async (req, res) => {
         const totalPages = Math.ceil(totalAbsensi / limit) || 1;
         const totalKaryawan = karyawanRow ? karyawanRow.total : 0;
 
+        const roleLabel = req.user.role === 'superadmin' ? 'Superadmin' : 'Admin';
+
         res.render('index', {
             data: absensiData,
             totalKaryawan: totalKaryawan,
             totalAbsensi: totalAbsensi,
-            admin: 'Julio (Admin)',
+            admin: `${req.user.nama} (${roleLabel})`,
+            user: req.user,
+            msg: msg,
+            msgType: msgType,
             currentPage: page,
             totalPages: totalPages,
             searchQuery: searchTerm
