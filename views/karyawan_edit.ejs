@@ -96,6 +96,19 @@
             background-color: #ffb300;
             transform: translateY(-1px);
         }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 12px;
+            }
+            .container {
+                padding: 20px 16px;
+                border-radius: 12px;
+            }
+            h1 {
+                font-size: 21px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -108,12 +121,16 @@
         
         <form action="/karyawan/edit/<%= k.uid %>" method="POST">
             <div>
-                <label>UID/PIN Mesin Absen</label>
+                <label>ID</label>
                 <input type="text" name="uid" value="<%= k.uid %>" required>
             </div>
             <div>
                 <label>Nama Karyawan</label>
                 <input type="text" name="nama" value="<%= k.nama %>" required>
+            </div>
+            <div>
+                <label>Jabatan / Bagian</label>
+                <input type="text" name="jabatan" value="<%= k.jabatan || '' %>" placeholder="Masukkan jabatan atau bagian">
             </div>
             <button type="submit">Simpan Perubahan</button>
         </form>
