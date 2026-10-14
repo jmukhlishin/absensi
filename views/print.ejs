@@ -229,6 +229,15 @@
             const dateSet = new Set();
             const empMap = new Map();
 
+            // 1. Inisialisasi empMap dengan semua karyawan terlebih dahulu agar yang tidak pernah absen tetap muncul
+            if (typeof semuaKaryawan !== 'undefined' && Array.isArray(semuaKaryawan)) {
+                semuaKaryawan.forEach(k => {
+                    const empName = k.nama || ('User ' + k.uid);
+                    empMap.set(empName, {});
+                });
+            }
+
+            // 2. Isi map dengan data laporan
             if (Array.isArray(laporan)) {
                 laporan.forEach(row => {
                     if (row.tanggal) dateSet.add(row.tanggal);
