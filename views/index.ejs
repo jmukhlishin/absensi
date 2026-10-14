@@ -15,7 +15,7 @@
         .dashboard-info { display: flex; justify-content: space-between; flex-wrap: wrap; margin-bottom: 20px; }
         .info-card { background: #e9ecef; padding: 15px; border-radius: 6px; width: 48%; margin-bottom: 10px; box-sizing: border-box; }
         .info-card h3 { margin: 0 0 10px 0; font-size: 16px; color: #555; }
-        .info-card p { margin: 0; font-size: 20px; font-weight: bold; color: #333; }
+        .info-card p { margin: 0; font-size: 18px; font-weight: bold; color: #333; }
         
         .status-online { color: green; }
         .status-offline { color: red; }
@@ -52,7 +52,7 @@
                 <p id="clock">00:00:00</p>
             </div>
             <div class="info-card">
-                <h3>Status Mesin (IP: 192.168.1.201)</h3>
+                <h3>Status Mesin (IP: 192.168.0.11)</h3>
                 <p id="machine-status">Mengecek...</p>
             </div>
             <div class="info-card">
@@ -60,33 +60,22 @@
                 <p><%= totalKaryawan %> Orang</p>
             </div>
             <div class="info-card">
-                <h3>Aksi Mesin</h3>
-                <button type="button" onclick="syncMachine()" style="width: 100%; padding: 8px; font-size:14px; background: #17a2b8;">Tarik Data dari Mesin</button>
+                <h3>Sinkronisasi Otomatis Berjalan</h3>
+                <button type="button" onclick="syncMachine()" style="width: 100%; padding: 8px; font-size:14px; background: #17a2b8;">Tarik Data Manual</button>
             </div>
         </div>
         
-        <form action="/absen" method="POST">
-            <h3>Absen Manual (Backup)</h3>
-            <input type="text" name="nama" placeholder="Nama Lengkap" required>
-            <select name="status" required>
-                <option value="Hadir">Hadir</option>
-                <option value="Izin">Izin</option>
-                <option value="Sakit">Sakit</option>
-            </select>
-            <button type="submit">Kirim Absensi</button>
-        </form>
-
         <h2>Karyawan Terbaru Absen</h2>
         <table>
             <thead>
                 <tr>
                     <th>ID</th>
                     <th>Nama</th>
-                    <th>Waktu</th>
+                    <th>Waktu (Check-In / Out)</th>
                     <th>Status</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="absensi-table-body">
                 <% if (data.length > 0) { %>
                     <% data.forEach(row => { %>
                         <tr>
@@ -106,11 +95,11 @@
     </div>
 
     <script>
-        // Jam Realtime
+        // Jam Realtime dengan Tanggal
         function updateClock() {
             const now = new Date();
-            const timeString = now.toLocaleTimeString('id-ID');
-            document.getElementById('clock').innerText = timeString;
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' };
+            document.getElementById('clock').innerText = now.toLocaleDateString('id-ID', options);
         }
         setInterval(updateClock, 1000);
         updateClock();
@@ -130,10 +119,42 @@
                 document.getElementById('machine-status').innerHTML = '<span class="status-offline">Offline / Error</span>';
             }
         }
-        setInterval(checkStatus, 15000); // Tiap 15 detik
+        setInterval(checkStatus, 10000); // Tiap 10 detik
         checkStatus();
 
-        // Tarik Data Mesin
+        // Auto Refresh List Absensi (Realtime)
+        async function fetchLatestAbsensi() {
+            try {
+                const res = await fetch('/api/latest-absensi');
+                const data = await res.json();
+                const tbody = document.getElementById('absensi-table-body');
+                if (data.length > 0) {
+                    let html = '';
+                    data.forEach(row => {
+                        html += `<tr>
+                            <td>${row.id}</td>
+                            <td>${row.nama}</td>
+                            <td>${row.waktu}</td>
+                            <td>${row.status}</td>
+                        </tr>`;
+                    });
+                    tbody.innerHTML = html;
+                }
+            } catch (err) {
+                console.error("Gagal refresh data");
+            }
+        }
+        setInterval(fetchLatestAbsensi, 5000); // Auto refresh table 5 detik sekali
+
+        // Background Auto-Sync dari Mesin
+        async function backgroundSync() {
+            try {
+                await fetch('/api/sync-machine');
+            } catch (e) { }
+        }
+        setInterval(backgroundSync, 30000); // Sinkronisasi otomatis dari mesin tiap 30 detik
+
+        // Tarik Data Manual
         async function syncMachine() {
             alert('Proses penarikan data dari mesin dimulai, harap tunggu...');
             try {
@@ -141,7 +162,7 @@
                 const data = await res.json();
                 alert(data.message);
                 if(data.success) {
-                    location.reload();
+                    fetchLatestAbsensi();
                 }
             } catch (err) {
                 alert('Terjadi kesalahan saat menarik data.');
