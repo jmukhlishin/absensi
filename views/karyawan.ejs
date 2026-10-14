@@ -5,31 +5,160 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kelola Karyawan</title>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 20px; background-color: #f4f7f6; }
-        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-        h1, h2 { color: #333; text-align: center; }
-        .nav { margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #ddd; }
-        .nav a { text-decoration: none; color: #007bff; font-weight: bold; margin-right: 15px; }
-        .nav a:hover { text-decoration: underline; }
+        :root {
+            --primary-blue: #0d47a1;
+            --secondary-blue: #1976d2;
+            --light-blue: #e3f2fd;
+            --primary-yellow: #ffc107;
+            --light-yellow: #fff8e1;
+            --text-dark: #1e293b;
+            --white: #ffffff;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 24px;
+            background: linear-gradient(135deg, #e3f2fd 0%, #fff8e1 100%);
+            min-height: 100vh;
+            color: var(--text-dark);
+        }
+        .container {
+            max-width: 900px;
+            margin: auto;
+            background: var(--white);
+            padding: 28px;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(13, 71, 161, 0.1);
+            border-top: 6px solid var(--primary-yellow);
+        }
+        h1, h2 {
+            color: var(--primary-blue);
+            text-align: center;
+            margin-top: 0;
+            font-weight: 700;
+        }
+        h1 {
+            font-size: 26px;
+            margin-bottom: 24px;
+        }
+        h1::after {
+            content: '';
+            display: block;
+            width: 70px;
+            height: 4px;
+            background: var(--primary-yellow);
+            margin: 8px auto 0;
+            border-radius: 2px;
+        }
+        h2 {
+            font-size: 18px;
+            text-align: left;
+            border-left: 5px solid var(--primary-yellow);
+            padding-left: 12px;
+            margin-bottom: 14px;
+        }
+        .nav {
+            margin-bottom: 24px;
+            padding: 14px 18px;
+            background: linear-gradient(90deg, var(--primary-blue), var(--secondary-blue));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+        }
+        .nav a {
+            text-decoration: none;
+            color: var(--primary-yellow);
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .nav a:hover {
+            text-decoration: underline;
+        }
         
-        form { display: flex; gap: 10px; margin-bottom: 30px; padding: 15px; background-color: #f9f9f9; border-radius: 8px; }
-        input { padding: 8px; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; flex: 1; }
-        button { padding: 8px 15px; background-color: #28a745; color: white; cursor: pointer; border: none; font-weight: bold; border-radius: 4px; }
-        button:hover { background-color: #218838; }
+        form {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 30px;
+            padding: 18px;
+            background-color: #f8fbff;
+            border: 1px solid #dbeafe;
+            border-radius: 12px;
+        }
+        input {
+            padding: 10px 14px;
+            font-size: 15px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            flex: 1;
+            min-width: 200px;
+        }
+        input:focus {
+            outline: none;
+            border-color: var(--secondary-blue);
+            box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.15);
+        }
+        button {
+            padding: 10px 20px;
+            background-color: var(--primary-yellow);
+            color: var(--primary-blue);
+            cursor: pointer;
+            border: none;
+            font-weight: 700;
+            border-radius: 8px;
+            font-size: 15px;
+            transition: all 0.2s ease;
+        }
+        button:hover {
+            background-color: #ffb300;
+            transform: translateY(-1px);
+        }
         
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
-        th { background-color: #007bff; color: white; }
-        tr:nth-child(even) { background-color: #f2f2f2; }
-        .action-links a { margin-right: 10px; text-decoration: none; color: white; padding: 5px 10px; border-radius: 4px; font-size: 14px; }
-        .btn-edit { background-color: #ffc107; color: #000 !important; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        th, td {
+            padding: 13px 16px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        th {
+            background: linear-gradient(90deg, var(--primary-blue), var(--secondary-blue));
+            color: var(--primary-yellow);
+            font-weight: 700;
+        }
+        tr:nth-child(even) { background-color: #f8fafc; }
+        tr:hover { background-color: var(--light-yellow); }
+        .action-links a {
+            margin-right: 8px;
+            text-decoration: none;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            display: inline-block;
+        }
+        .btn-edit {
+            background-color: var(--primary-yellow);
+            color: var(--primary-blue) !important;
+        }
+        .btn-edit:hover { background-color: #ffb300; }
         .btn-delete { background-color: #dc3545; }
+        .btn-delete:hover { background-color: #b02a37; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="nav">
-            <a href="/">← Kembali ke Dashboard</a>
+            <a href="/">&larr; Kembali ke Dashboard</a>
         </div>
         
         <h1>Manajemen Karyawan</h1>
@@ -55,7 +184,7 @@
                     <% karyawan.forEach(k => { %>
                         <tr>
                             <td><%= k.uid %></td>
-                            <td><%= k.nama %></td>
+                            <td><strong><%= k.nama %></strong></td>
                             <td class="action-links">
                                 <a href="/karyawan/edit/<%= k.uid %>" class="btn-edit">Edit</a>
                                 <a href="/karyawan/delete/<%= k.uid %>" class="btn-delete" onclick="return confirm('Yakin ingin menghapus karyawan ini?')">Hapus</a>
