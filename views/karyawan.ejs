@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kelola Karyawan</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 20px; background-color: #f4f7f6; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        h1, h2 { color: #333; text-align: center; }
+        .nav { margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #ddd; }
+        .nav a { text-decoration: none; color: #007bff; font-weight: bold; margin-right: 15px; }
+        .nav a:hover { text-decoration: underline; }
+        
+        form { display: flex; gap: 10px; margin-bottom: 30px; padding: 15px; background-color: #f9f9f9; border-radius: 8px; }
+        input { padding: 8px; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; flex: 1; }
+        button { padding: 8px 15px; background-color: #28a745; color: white; cursor: pointer; border: none; font-weight: bold; border-radius: 4px; }
+        button:hover { background-color: #218838; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #007bff; color: white; }
+        tr:nth-child(even) { background-color: #f2f2f2; }
+        .action-links a { margin-right: 10px; text-decoration: none; color: white; padding: 5px 10px; border-radius: 4px; font-size: 14px; }
+        .btn-edit { background-color: #ffc107; color: #000 !important; }
+        .btn-delete { background-color: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="/">← Kembali ke Dashboard</a>
+        </div>
+        
+        <h1>Manajemen Karyawan</h1>
+        
+        <h2>Tambah Karyawan Baru</h2>
+        <form action="/karyawan/add" method="POST">
+            <input type="number" name="uid" placeholder="UID Mesin Absen" required>
+            <input type="text" name="nama" placeholder="Nama Karyawan" required>
+            <button type="submit">+ Tambah</button>
+        </form>
+
+        <h2>Daftar Karyawan</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>UID Mesin</th>
+                    <th>Nama</th>
+                    <th>Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                <% if (karyawan.length > 0) { %>
+                    <% karyawan.forEach(k => { %>
+                        <tr>
+                            <td><%= k.id %></td>
+                            <td><%= k.uid %></td>
+                            <td><%= k.nama %></td>
+                            <td class="action-links">
+                                <a href="/karyawan/edit/<%= k.id %>" class="btn-edit">Edit</a>
+                                <a href="/karyawan/delete/<%= k.id %>" class="btn-delete" onclick="return confirm('Yakin ingin menghapus karyawan ini?')">Hapus</a>
+                            </td>
+                        </tr>
+                    <% }) %>
+                <% } else { %>
+                    <tr>
+                        <td colspan="4" style="text-align: center;">Belum ada data karyawan.</td>
+                    </tr>
+                <% } %>
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>
