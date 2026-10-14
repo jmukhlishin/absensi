@@ -76,6 +76,12 @@
             align-items: center;
             box-shadow: 0 4px 12px rgba(13, 71, 161, 0.18);
         }
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
         .nav strong { color: var(--primary-yellow); }
         .nav a {
             text-decoration: none;
@@ -85,6 +91,7 @@
             border-radius: 8px;
             transition: all 0.2s ease;
             background: rgba(255, 255, 255, 0.12);
+            text-align: center;
         }
         .nav a:hover {
             background: var(--primary-yellow);
@@ -93,6 +100,7 @@
         .print-form {
             display: flex;
             flex-direction: row;
+            flex-wrap: wrap;
             gap: 8px;
             margin: 0;
             padding: 6px 10px;
@@ -157,6 +165,7 @@
             font-size: 18px;
             font-weight: 700;
             color: var(--primary-blue);
+            word-break: break-word;
         }
 
         .status-online { color: #16a34a; }
@@ -196,6 +205,8 @@
         .table-container {
             max-height: 520px;
             overflow-y: auto;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
             border: 1px solid #cbd5e1;
             border-radius: 12px;
             margin-bottom: 22px;
@@ -203,6 +214,7 @@
         }
         table {
             width: 100%;
+            min-width: 520px;
             border-collapse: collapse;
             margin-top: 0;
         }
@@ -219,6 +231,7 @@
             top: 0;
             z-index: 1;
             letter-spacing: 0.3px;
+            white-space: nowrap;
         }
         tr:nth-child(even) { background-color: #f8fafc; }
         tr:hover { background-color: var(--light-yellow); }
@@ -229,6 +242,7 @@
             border-radius: 20px;
             font-size: 12px;
             font-weight: 700;
+            white-space: nowrap;
         }
         .badge-masuk {
             background-color: var(--light-blue);
@@ -245,6 +259,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
+            flex-wrap: wrap;
             gap: 14px;
             margin-bottom: 10px;
         }
@@ -277,6 +292,7 @@
             padding: 8px 18px;
             border-radius: 10px;
             border: 1px solid var(--primary-yellow);
+            text-align: center;
         }
 
         /* Modal / Overlay untuk Loading Bar Sinkronisasi */
@@ -300,6 +316,7 @@
             align-items: center;
             z-index: 99999;
             user-select: none;
+            padding: 16px;
         }
         .sync-overlay.active {
             display: flex;
@@ -308,7 +325,7 @@
             background: var(--white);
             padding: 32px;
             border-radius: 16px;
-            width: 90%;
+            width: 100%;
             max-width: 450px;
             text-align: center;
             box-shadow: 0 12px 30px rgba(0,0,0,0.3);
@@ -366,6 +383,78 @@
             cursor: pointer;
         }
         .btn-close-modal:hover { background-color: var(--secondary-blue); }
+
+        /* Media Queries untuk Mobile & Tablet */
+        @media (max-width: 768px) {
+            body {
+                padding: 12px;
+            }
+            .container {
+                padding: 18px 14px;
+                border-radius: 12px;
+            }
+            h1 {
+                font-size: 22px;
+                margin-bottom: 18px;
+            }
+            h2 {
+                font-size: 18px;
+            }
+            .nav {
+                flex-direction: column;
+                align-items: stretch;
+                padding: 14px;
+                gap: 12px;
+            }
+            .nav-links {
+                flex-direction: column;
+                align-items: stretch;
+                width: 100%;
+                gap: 10px;
+            }
+            .nav a {
+                display: block;
+                width: 100%;
+                padding: 10px;
+            }
+            .print-form {
+                flex-direction: column;
+                align-items: stretch;
+                width: 100%;
+                padding: 10px;
+                gap: 8px;
+            }
+            .print-form span {
+                text-align: center;
+            }
+            .print-form input[type="date"],
+            .print-form button {
+                width: 100%;
+                padding: 9px 12px;
+                font-size: 14px;
+            }
+            .dashboard-info {
+                grid-template-columns: 1fr;
+                gap: 12px;
+                margin-bottom: 22px;
+            }
+            .info-card {
+                padding: 14px;
+            }
+            .info-card p {
+                font-size: 16px;
+            }
+            th, td {
+                padding: 10px 12px;
+                font-size: 13px;
+            }
+            .sync-modal {
+                padding: 22px 18px;
+            }
+            .sync-title {
+                font-size: 19px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -374,7 +463,7 @@
             <div>
                 <strong>Login sebagai:</strong> <%= admin %>
             </div>
-            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <div class="nav-links">
                 <a href="/">Dashboard</a>
                 <a href="/karyawan">Kelola Karyawan</a>
                 <form class="print-form" action="/print" method="GET" target="_blank">
