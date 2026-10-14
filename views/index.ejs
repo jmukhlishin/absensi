@@ -19,6 +19,7 @@
         
         .status-online { color: green; }
         .status-offline { color: red; }
+        .status-syncing { color: #d39e00; }
         
         form { display: flex; flex-direction: column; gap: 15px; margin-bottom: 30px; padding: 20px; background-color: #f9f9f9; border-radius: 8px; }
         input, select, button { padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; }
@@ -30,6 +31,88 @@
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
         th { background-color: #007bff; color: white; position: sticky; top: 0; z-index: 1; }
         tr:nth-child(even) { background-color: #f2f2f2; }
+
+        /* Modal / Overlay untuk Loading Bar Sinkronisasi */
+        body.sync-locked {
+            overflow: hidden !important;
+            pointer-events: none;
+        }
+        body.sync-locked .sync-overlay {
+            pointer-events: all;
+        }
+        
+        .sync-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 99999;
+            user-select: none;
+        }
+        .sync-overlay.active {
+            display: flex;
+        }
+        .sync-modal {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 450px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        .sync-title {
+            font-size: 22px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .sync-status-text {
+            font-size: 16px;
+            color: #666;
+            margin-bottom: 20px;
+            min-height: 48px;
+        }
+        .progress-container {
+            width: 100%;
+            background-color: #e9ecef;
+            border-radius: 6px;
+            overflow: hidden;
+            margin-bottom: 15px;
+            height: 25px;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background-color: #007bff;
+            transition: width 0.3s ease;
+            background-image: linear-gradient(45deg,rgba(255,255,255,.15) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.15) 50%,rgba(255,255,255,.15) 75%,transparent 75%,transparent);
+            background-size: 1rem 1rem;
+            animation: progress-bar-stripes 1s linear infinite;
+        }
+        @keyframes progress-bar-stripes {
+            from { background-position: 1rem 0; }
+            to { background-position: 0 0; }
+        }
+        .progress-percentage {
+            font-size: 18px;
+            font-weight: bold;
+            color: #007bff;
+        }
+        .btn-close-modal {
+            display: none;
+            margin-top: 20px;
+            background-color: #6c757d;
+            width: 100%;
+        }
+        .btn-close-modal:hover { background-color: #5a6268; }
     </style>
 </head>
 <body>
@@ -63,12 +146,12 @@
             </div>
             <div class="info-card">
                 <h3>Total Karyawan</h3>
-                <p><%= totalKaryawan %> Orang</p>
+                <p><span id="total-karyawan-count"><%= totalKaryawan %></span> Orang</p>
             </div>
             <div class="info-card">
-                <h3>Sinkronisasi Manual</h3>
-                <button type="button" onclick="syncKaryawan()" style="width: 100%; padding: 8px; font-size:14px; background: #17a2b8; margin-bottom: 8px;">Tarik Data Karyawan</button>
-                <button type="button" onclick="syncAbsensi()" style="width: 100%; padding: 8px; font-size:14px; background: #28a745;">Tarik Data Absensi</button>
+                <h3>Sinkronisasi Manual (Incremental)</h3>
+                <button type="button" onclick="startSync('karyawan')" style="width: 100%; padding: 8px; font-size:14px; background: #17a2b8; margin-bottom: 8px;">Tarik Data Karyawan</button>
+                <button type="button" onclick="startSync('absensi')" style="width: 100%; padding: 8px; font-size:14px; background: #28a745;">Tarik Data Absensi</button>
             </div>
         </div>
         
@@ -94,7 +177,7 @@
                             </tr>
                         <% }) %>
                     <% } else { %>
-                        <tr>
+                        <tr id="empty-row">
                             <td colspan="4" style="text-align: center;">Belum ada data absensi.</td>
                         </tr>
                     <% } %>
@@ -102,14 +185,27 @@
             </table>
         </div>
 
-        <div class="pagination" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 20px;">
+        <div class="pagination" id="pagination-controls" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 20px;">
             <% if (currentPage > 1) { %>
                 <a href="/?page=<%= currentPage - 1 %>" style="padding: 8px 12px; background: #007bff; color: white; text-decoration: none; border-radius: 4px;">Sebelumnya</a>
             <% } %>
-            <span style="font-weight: bold;">Halaman <%= currentPage %> dari <%= totalPages %></span>
+            <span style="font-weight: bold;" id="page-info">Halaman <%= currentPage %> dari <%= totalPages %></span>
             <% if (currentPage < totalPages) { %>
                 <a href="/?page=<%= currentPage + 1 %>" style="padding: 8px 12px; background: #007bff; color: white; text-decoration: none; border-radius: 4px;">Selanjutnya</a>
             <% } %>
+        </div>
+    </div>
+
+    <!-- Overlay Loading Bar Sinkronisasi -->
+    <div id="sync-overlay" class="sync-overlay">
+        <div class="sync-modal">
+            <div class="sync-title" id="sync-title">Menarik Data...</div>
+            <div class="progress-container">
+                <div id="sync-progress-bar" class="progress-bar"></div>
+            </div>
+            <div id="sync-progress-text" class="progress-percentage">0%</div>
+            <div class="sync-status-text" id="sync-status-text">Memulai proses...</div>
+            <button id="btn-close-modal" class="btn-close-modal" onclick="closeSyncModal()">Tutup</button>
         </div>
     </div>
 
@@ -123,13 +219,15 @@
         setInterval(updateClock, 1000);
         updateClock();
 
-        // Cek Status Mesin Realtime
+        // Cek Status Mesin Realtime (Non-blocking)
         async function checkStatus() {
             try {
                 const res = await fetch('/api/machine-status');
                 const data = await res.json();
                 const statusEl = document.getElementById('machine-status');
-                if (data.status === 'Online') {
+                if (data.syncing) {
+                    statusEl.innerHTML = '<span class="status-syncing">Sedang Sinkronisasi...</span>';
+                } else if (data.status === 'Online') {
                     statusEl.innerHTML = '<span class="status-online">Online (Terhubung)</span>';
                 } else {
                     statusEl.innerHTML = '<span class="status-offline">Offline (Tidak Terhubung)</span>';
@@ -141,17 +239,19 @@
         setInterval(checkStatus, 10000); // Tiap 10 detik
         checkStatus();
 
-        // Auto Refresh List Absensi (Realtime)
-        async function fetchLatestAbsensi() {
+        // Refresh Data Dashboard (Tanpa reload halaman)
+        async function refreshDashboardStats() {
             try {
                 const urlParams = new URLSearchParams(window.location.search);
                 const page = urlParams.get('page') || 1;
-                const res = await fetch('/api/latest-absensi?page=' + page);
+                const res = await fetch('/api/dashboard-summary?page=' + page);
                 const data = await res.json();
+                
+                // Update Tabel
                 const tbody = document.getElementById('absensi-table-body');
-                if (data.length > 0) {
+                if (data.rows && data.rows.length > 0) {
                     let html = '';
-                    data.forEach(row => {
+                    data.rows.forEach(row => {
                         html += `<tr>
                             <td>${row.id}</td>
                             <td>${row.nama || 'Tidak Diketahui'}</td>
@@ -160,50 +260,145 @@
                         </tr>`;
                     });
                     tbody.innerHTML = html;
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Belum ada data absensi.</td></tr>';
                 }
+
+                // Update Total Karyawan
+                document.getElementById('total-karyawan-count').innerText = data.totalKaryawan || 0;
+
+                // Update Pagination Info
+                document.getElementById('page-info').innerText = `Halaman ${data.currentPage} dari ${data.totalPages}`;
+                
+                // Update Link Pagination
+                const paginationControls = document.getElementById('pagination-controls');
+                let phtml = '';
+                if (data.currentPage > 1) {
+                    phtml += `<a href="/?page=${data.currentPage - 1}" style="padding: 8px 12px; background: #007bff; color: white; text-decoration: none; border-radius: 4px;">Sebelumnya</a> `;
+                }
+                phtml += `<span style="font-weight: bold;" id="page-info">Halaman ${data.currentPage} dari ${data.totalPages}</span> `;
+                if (data.currentPage < data.totalPages) {
+                    phtml += `<a href="/?page=${data.currentPage + 1}" style="padding: 8px 12px; background: #007bff; color: white; text-decoration: none; border-radius: 4px;">Selanjutnya</a>`;
+                }
+                paginationControls.innerHTML = phtml;
+
             } catch (err) {
-                console.error("Gagal refresh data");
+                console.error("Gagal refresh data statistik:", err);
             }
         }
-        setInterval(fetchLatestAbsensi, 5000); // Auto refresh table 5 detik sekali
 
-        // Background Auto-Sync dari Mesin
-        async function backgroundSync() {
-            try {
-                await fetch('/api/sync-absensi');
-            } catch (e) { }
-        }
-        setInterval(backgroundSync, 30000); // Sinkronisasi otomatis dari mesin tiap 30 detik
+        // Variabel Status Sync
+        let syncPollInterval = null;
 
-        // Tarik Data Karyawan
-        async function syncKaryawan() {
-            alert('Proses tarik data karyawan dari mesin dimulai, harap tunggu...');
+        // Cegah interaksi keyboard (Tab, Enter, Space) saat modal overlay aktif
+        document.addEventListener('keydown', function(e) {
+            if (document.body.classList.contains('sync-locked')) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        }, true);
+
+        // Fungsi Memulai Sinkronisasi (Karyawan / Absensi)
+        async function startSync(type) {
+            // Lock UI & Tampilkan Modal
+            document.body.classList.add('sync-locked');
+            document.getElementById('sync-overlay').classList.add('active');
+            document.getElementById('btn-close-modal').style.display = 'none';
+            document.getElementById('sync-title').innerText = type === 'karyawan' ? 'Tarik Data Karyawan' : 'Tarik Data Absensi';
+            updateProgressBar(0, 'Menghubungkan ke server...');
+
             try {
-                const res = await fetch('/api/sync-karyawan');
+                // Panggil endpoint secara background/asynchronous (tanpa memblokir respons HTTP)
+                const endpoint = type === 'karyawan' ? '/api/sync-karyawan?background=1' : '/api/sync-absensi?background=1';
+                const res = await fetch(endpoint);
                 const data = await res.json();
-                alert(data.message);
-                if(data.success) {
-                    window.location.reload(); // Reload untuk update jumlah total karyawan
+
+                if (!data.success && !data.alreadyRunning && !data.started) {
+                    throw new Error(data.message || 'Gagal memulai sinkronisasi');
                 }
+
+                // Mulai polling status setiap 250ms
+                syncPollInterval = setInterval(pollSyncStatus, 250);
             } catch (err) {
-                alert('Terjadi kesalahan saat menarik data karyawan.');
+                showSyncResult('error', err.message);
             }
         }
 
-        // Tarik Data Absensi
-        async function syncAbsensi() {
-            alert('Proses tarik data absensi dari mesin dimulai, harap tunggu...');
+        function updateProgressBar(progress, message, isError = false) {
+            const bar = document.getElementById('sync-progress-bar');
+            const pct = document.getElementById('sync-progress-text');
+            const status = document.getElementById('sync-status-text');
+
+            bar.style.width = progress + '%';
+            bar.style.backgroundColor = isError ? '#dc3545' : (progress === 100 ? '#28a745' : '#007bff');
+            pct.innerText = progress + '%';
+            pct.style.color = isError ? '#dc3545' : (progress === 100 ? '#28a745' : '#007bff');
+            status.innerText = message;
+        }
+
+        async function pollSyncStatus() {
             try {
-                const res = await fetch('/api/sync-absensi');
-                const data = await res.json();
-                alert(data.message);
-                if(data.success) {
-                    fetchLatestAbsensi();
+                const res = await fetch('/api/sync-status');
+                const state = await res.json();
+
+                if (state.status === 'running' || state.isSyncing) {
+                    updateProgressBar(state.progress, state.message);
+                } else if (state.status === 'completed') {
+                    clearInterval(syncPollInterval);
+                    updateProgressBar(100, state.message);
+                    finishSync(true);
+                } else if (state.status === 'error') {
+                    clearInterval(syncPollInterval);
+                    updateProgressBar(100, state.message, true);
+                    finishSync(false);
                 }
             } catch (err) {
-                alert('Terjadi kesalahan saat menarik data absensi.');
+                // Jika server tidak merespon saat polling, biarkan saja (mungkin restart)
             }
         }
+
+        function finishSync(success) {
+            if (success) {
+                // Beri waktu 1.5 detik bagi user untuk melihat hasil 100%, lalu refresh dan tutup
+                setTimeout(() => {
+                    refreshDashboardStats();
+                    closeSyncModal();
+                }, 1500);
+            } else {
+                // Jika error, jangan auto-close, tampilkan tombol Tutup
+                document.getElementById('btn-close-modal').style.display = 'block';
+            }
+        }
+
+        function showSyncResult(status, message) {
+            if (syncPollInterval) clearInterval(syncPollInterval);
+            updateProgressBar(100, message, status === 'error');
+            document.getElementById('btn-close-modal').style.display = 'block';
+        }
+
+        function closeSyncModal() {
+            if (syncPollInterval) clearInterval(syncPollInterval);
+            document.getElementById('sync-overlay').classList.remove('active');
+            document.body.classList.remove('sync-locked');
+            refreshDashboardStats();
+        }
+
+        // Cek jika halaman direfresh di tengah-tengah sinkronisasi (lanjutkan overlay progress)
+        window.addEventListener('load', async () => {
+            try {
+                const res = await fetch('/api/sync-status');
+                const state = await res.json();
+                if (state.isSyncing && state.status === 'running') {
+                    // Lanjutkan tampilan sync
+                    document.body.classList.add('sync-locked');
+                    document.getElementById('sync-overlay').classList.add('active');
+                    document.getElementById('sync-title').innerText = state.type === 'karyawan' ? 'Tarik Data Karyawan' : 'Tarik Data Absensi';
+                    updateProgressBar(state.progress, state.message);
+                    syncPollInterval = setInterval(pollSyncStatus, 250);
+                }
+            } catch (e) {}
+        });
+
     </script>
 </body>
 </html>
