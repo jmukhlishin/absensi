@@ -48,18 +48,43 @@ const db = new sqlite3.Database('./absensi.db', (err) => {
 
 // Dashboard Route
 app.get('/', (req, res) => {
-    db.all(`SELECT a.id, k.nama, a.waktu, a.status 
-            FROM absensi a 
-            LEFT JOIN karyawan k ON a.uid = k.uid 
-            ORDER BY a.waktu DESC LIMIT 10`, [], (err, absensiData) => {
+    const page = parseInt(req.query.page) || 1;
+    const limit = 50;
+    const offset = (page - 1) * limit;
+
+    const query = `
+        SELECT a.id, k.nama, a.waktu, 
+        CASE 
+            WHEN a.status = 'Mesin' THEN 
+                CASE 
+                    WHEN (SELECT COUNT(*) FROM absensi a2 WHERE a2.uid = a.uid AND date(a2.waktu) = date(a.waktu) AND a2.waktu <= a.waktu) % 2 = 1 THEN 'Masuk' 
+                    ELSE 'Pulang' 
+                END
+            ELSE a.status 
+        END as status
+        FROM absensi a 
+        LEFT JOIN karyawan k ON a.uid = k.uid 
+        ORDER BY a.waktu DESC 
+        LIMIT ? OFFSET ?
+    `;
+
+    db.all(query, [limit, offset], (err, absensiData) => {
         if (err) throw err;
-        db.get('SELECT COUNT(*) as total FROM karyawan', [], (err, row) => {
+        db.get('SELECT COUNT(*) as total FROM absensi', [], (err, totalRow) => {
             if (err) throw err;
-            const totalKaryawan = row ? row.total : 0;
-            res.render('index', { 
-                data: absensiData,
-                totalKaryawan: totalKaryawan,
-                admin: 'Julio (Admin)' 
+            const totalAbsensi = totalRow ? totalRow.total : 0;
+            const totalPages = Math.ceil(totalAbsensi / limit) || 1;
+
+            db.get('SELECT COUNT(*) as total FROM karyawan', [], (err, row) => {
+                if (err) throw err;
+                const totalKaryawan = row ? row.total : 0;
+                res.render('index', { 
+                    data: absensiData,
+                    totalKaryawan: totalKaryawan,
+                    admin: 'Julio (Admin)',
+                    currentPage: page,
+                    totalPages: totalPages
+                });
             });
         });
     });
@@ -67,10 +92,27 @@ app.get('/', (req, res) => {
 
 // API Get Latest Absensi (Realtime Update)
 app.get('/api/latest-absensi', (req, res) => {
-    db.all(`SELECT a.id, k.nama, a.waktu, a.status 
-            FROM absensi a 
-            LEFT JOIN karyawan k ON a.uid = k.uid 
-            ORDER BY a.waktu DESC LIMIT 10`, [], (err, rows) => {
+    const page = parseInt(req.query.page) || 1;
+    const limit = 50;
+    const offset = (page - 1) * limit;
+
+    const query = `
+        SELECT a.id, k.nama, a.waktu, 
+        CASE 
+            WHEN a.status = 'Mesin' THEN 
+                CASE 
+                    WHEN (SELECT COUNT(*) FROM absensi a2 WHERE a2.uid = a.uid AND date(a2.waktu) = date(a.waktu) AND a2.waktu <= a.waktu) % 2 = 1 THEN 'Masuk' 
+                    ELSE 'Pulang' 
+                END
+            ELSE a.status 
+        END as status
+        FROM absensi a 
+        LEFT JOIN karyawan k ON a.uid = k.uid 
+        ORDER BY a.waktu DESC 
+        LIMIT ? OFFSET ?
+    `;
+
+    db.all(query, [limit, offset], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows);
     });
@@ -106,7 +148,6 @@ app.get('/karyawan/edit/:uid', (req, res) => {
     const uid = req.params.uid;
     db.get('SELECT * FROM karyawan WHERE uid = ?', [uid], (err, row) => {
         if (err) throw err;
-        // Menggunakan view yang ada tetapi datanya disesuaikan
         res.render('karyawan_edit', { k: row });
     });
 });
@@ -130,16 +171,29 @@ app.get('/karyawan/delete/:uid', (req, res) => {
 
 // Cetak Laporan (Ringkas)
 app.get('/print', (req, res) => {
-    const query = `
+    const start = req.query.start;
+    const end = req.query.end;
+
+    let query = `
         SELECT k.nama, date(a.waktu) as tanggal, MIN(time(a.waktu)) as check_in, MAX(time(a.waktu)) as check_out
         FROM absensi a
         LEFT JOIN karyawan k ON a.uid = k.uid
+    `;
+    const params = [];
+
+    if (start && end) {
+        query += ` WHERE date(a.waktu) >= ? AND date(a.waktu) <= ?`;
+        params.push(start, end);
+    }
+
+    query += `
         GROUP BY a.uid, k.nama, date(a.waktu)
         ORDER BY tanggal DESC, k.nama ASC
     `;
-    db.all(query, [], (err, rows) => {
+
+    db.all(query, params, (err, rows) => {
         if (err) throw err;
-        res.render('print', { laporan: rows });
+        res.render('print', { laporan: rows, start, end });
     });
 });
 
@@ -186,7 +240,7 @@ app.get('/api/sync-absensi', async (req, res) => {
                 
                 await new Promise((resolve) => {
                     db.run('INSERT INTO absensi (uid, waktu, status) SELECT ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM absensi WHERE uid=? AND waktu=?)', 
-                            [uid, waktu, status, uid, waktu], resolve);
+                                [uid, waktu, status, uid, waktu], resolve);
                 });
             }
         }
