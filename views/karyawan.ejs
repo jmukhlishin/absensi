@@ -36,7 +36,7 @@
         
         <h2>Tambah Karyawan Baru</h2>
         <form action="/karyawan/add" method="POST">
-            <input type="number" name="uid" placeholder="UID Mesin Absen" required>
+            <input type="text" name="uid" placeholder="UID/PIN Mesin Absen" required>
             <input type="text" name="nama" placeholder="Nama Karyawan" required>
             <button type="submit">+ Tambah</button>
         </form>
@@ -45,7 +45,6 @@
         <table>
             <thead>
                 <tr>
-                    <th>ID</th>
                     <th>UID Mesin</th>
                     <th>Nama</th>
                     <th>Aksi</th>
@@ -55,18 +54,17 @@
                 <% if (karyawan.length > 0) { %>
                     <% karyawan.forEach(k => { %>
                         <tr>
-                            <td><%= k.id %></td>
                             <td><%= k.uid %></td>
                             <td><%= k.nama %></td>
                             <td class="action-links">
-                                <a href="/karyawan/edit/<%= k.id %>" class="btn-edit">Edit</a>
-                                <a href="/karyawan/delete/<%= k.id %>" class="btn-delete" onclick="return confirm('Yakin ingin menghapus karyawan ini?')">Hapus</a>
+                                <a href="/karyawan/edit/<%= k.uid %>" class="btn-edit">Edit</a>
+                                <a href="/karyawan/delete/<%= k.uid %>" class="btn-delete" onclick="return confirm('Yakin ingin menghapus karyawan ini?')">Hapus</a>
                             </td>
                         </tr>
                     <% }) %>
                 <% } else { %>
                     <tr>
-                        <td colspan="4" style="text-align: center;">Belum ada data karyawan.</td>
+                        <td colspan="3" style="text-align: center;">Belum ada data karyawan.</td>
                     </tr>
                 <% } %>
             </tbody>
