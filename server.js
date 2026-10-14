@@ -262,7 +262,7 @@ app.get('/print', (req, res) => {
     const end = req.query.end;
 
     let query = `
-        SELECT k.nama, date(a.waktu) as tanggal, MIN(time(a.waktu)) as check_in, MAX(time(a.waktu)) as check_out
+        SELECT a.uid, COALESCE(k.nama, 'User ' || a.uid) as nama, date(a.waktu) as tanggal, MIN(time(a.waktu)) as check_in, MAX(time(a.waktu)) as check_out
         FROM absensi a
         LEFT JOIN karyawan k ON a.uid = k.uid
     `;
@@ -275,7 +275,7 @@ app.get('/print', (req, res) => {
 
     query += `
         GROUP BY a.uid, k.nama, date(a.waktu)
-        ORDER BY tanggal DESC, k.nama ASC
+        ORDER BY tanggal ASC, nama ASC
     `;
 
     db.all(query, params, (err, rows) => {
@@ -284,7 +284,7 @@ app.get('/print', (req, res) => {
     });
 });
 
-// Fungsi Asynchronous/Non-Blocking untuk Tarik Data Karyawan
+// Fungsi Asynchronous/Non-Blocking untuk Download Data Karyawan
 async function runSyncKaryawan(ip) {
     updateSyncState({
         isSyncing: true,
@@ -354,7 +354,7 @@ async function runSyncKaryawan(ip) {
             await yieldEventLoop();
         }
 
-        const msg = `Data karyawan berhasil ditarik dan disinkronisasi (${savedCount} karyawan)!`;
+        const msg = `Data karyawan berhasil didownload dan disinkronisasi (${savedCount} karyawan)!`;
         updateSyncState({
             isSyncing: false,
             status: 'completed',
@@ -369,7 +369,7 @@ async function runSyncKaryawan(ip) {
         if (socketCreated) {
             try { await zkInstance.disconnect(); } catch (_) {}
         }
-        const errMsg = e && e.message ? `Gagal menarik data karyawan: ${e.message}` : 'Gagal koneksi ke mesin absensi.';
+        const errMsg = e && e.message ? `Gagal mendownload data karyawan: ${e.message}` : 'Gagal koneksi ke mesin absensi.';
         updateSyncState({
             isSyncing: false,
             status: 'error',
@@ -380,7 +380,7 @@ async function runSyncKaryawan(ip) {
     }
 }
 
-// Fungsi Asynchronous/Non-Blocking & Incremental untuk Tarik Data Absensi
+// Fungsi Asynchronous/Non-Blocking & Incremental untuk Download Data Absensi
 async function runSyncAbsensi(ip) {
     updateSyncState({
         isSyncing: true,
@@ -468,7 +468,7 @@ async function runSyncAbsensi(ip) {
         const totalNew = newLogs.length;
 
         if (totalNew === 0) {
-            const msg = 'Data absensi sudah paling mutakhir (tidak ada data baru untuk ditarik).';
+            const msg = 'Data absensi sudah paling mutakhir (tidak ada data baru untuk didownload).';
             updateSyncState({
                 isSyncing: false,
                 status: 'completed',
@@ -519,7 +519,7 @@ async function runSyncAbsensi(ip) {
             await yieldEventLoop();
         }
 
-        const msg = `Data absensi berhasil ditarik (${insertedCount} data baru ditambahkan)!`;
+        const msg = `Data absensi berhasil didownload (${insertedCount} data baru ditambahkan)!`;
         updateSyncState({
             isSyncing: false,
             status: 'completed',
@@ -535,7 +535,7 @@ async function runSyncAbsensi(ip) {
         if (socketCreated) {
             try { await zkInstance.disconnect(); } catch (_) {}
         }
-        const errMsg = e && e.message ? `Gagal menarik data absensi: ${e.message}` : 'Gagal koneksi ke mesin absensi.';
+        const errMsg = e && e.message ? `Gagal mendownload data absensi: ${e.message}` : 'Gagal koneksi ke mesin absensi.';
         updateSyncState({
             isSyncing: false,
             status: 'error',
@@ -565,7 +565,7 @@ app.get('/api/sync-karyawan', async (req, res) => {
         return res.json({
             success: true,
             started: true,
-            message: 'Proses tarik data karyawan dimulai.',
+            message: 'Proses download data karyawan dimulai.',
             state: syncState
         });
     }
@@ -593,7 +593,7 @@ app.get('/api/sync-absensi', async (req, res) => {
         return res.json({
             success: true,
             started: true,
-            message: 'Proses tarik data absensi dimulai.',
+            message: 'Proses download data absensi dimulai.',
             state: syncState
         });
     }
