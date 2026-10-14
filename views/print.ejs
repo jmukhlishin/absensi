@@ -26,14 +26,17 @@
 <body>
     <div class="container">
         <h1>Rekap Kehadiran Karyawan</h1>
+        <% if (typeof start !== 'undefined' && typeof end !== 'undefined' && start && end) { %>
+            <h3 style="text-align: center; margin-top: -10px; margin-bottom: 20px;">Periode: <%= start %> s/d <%= end %></h3>
+        <% } %>
         <div class="date">Dicetak pada: <span id="print-date"></span></div>
         
         <table>
             <thead>
                 <tr>
                     <th>Nama Karyawan</th>
-                    <th>Check-in Masuk</th>
-                    <th>Check-out Keluar</th>
+                    <th>Masuk</th>
+                    <th>Pulang</th>
                 </tr>
             </thead>
             <tbody>
