@@ -662,6 +662,61 @@ app.get('/karyawan/delete/:uid', (req, res) => {
     });
 });
 
+// Endpoint Upload Karyawan ke Mesin (ZKTeco)
+app.post('/api/upload-karyawan', async (req, res) => {
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Transfer-Encoding', 'chunked');
+    
+    try {
+        const users = req.body.users;
+        if (!users || !Array.isArray(users) || users.length === 0) {
+            res.write(JSON.stringify({ status: 'error', progress: 100, message: 'Tidak ada data karyawan yang dipilih.' }) + '\n');
+            return res.end();
+        }
+
+        res.write(JSON.stringify({ status: 'running', progress: 10, message: 'Menyiapkan koneksi ke mesin...' }) + '\n');
+        
+        const config = await getMachineConfig();
+        const zkInstance = new ZKLib(config.ip, config.port, 10000, 4000);
+        
+        await zkInstance.createSocket();
+        res.write(JSON.stringify({ status: 'running', progress: 30, message: 'Koneksi ke mesin berhasil.' }) + '\n');
+
+        const total = users.length;
+        let successCount = 0;
+
+        for (let i = 0; i < total; i++) {
+            const u = users[i];
+            try {
+                // Konversi uid ke int, fallback jika bukan angka murni, pastikan userid tetap string
+                let uidInt = parseInt(u.uid, 10);
+                if (isNaN(uidInt)) uidInt = Math.floor(Math.random() * 10000); // Darurat bila uid string bukan angka
+                
+                await zkInstance.setUser(uidInt, u.uid, u.nama, '', 0, 0);
+                successCount++;
+            } catch (e) {
+                console.error(`Gagal upload user ${u.nama} (${u.uid}):`, e);
+            }
+            
+            const pct = 30 + Math.floor(((i + 1) / total) * 60);
+            res.write(JSON.stringify({ status: 'running', progress: pct, message: `Mengupload ${u.nama} (${i+1}/${total})...` }) + '\n');
+            await yieldEventLoop();
+        }
+
+        try {
+            await zkInstance.disconnect();
+        } catch (_) {}
+
+        res.write(JSON.stringify({ status: 'completed', progress: 100, message: `Selesai! Berhasil mengupload ${successCount} dari ${total} data ke mesin.` }) + '\n');
+        res.end();
+    } catch (err) {
+        console.error('Error upload karyawan:', err);
+        res.write(JSON.stringify({ status: 'error', progress: 100, message: 'Terjadi kesalahan sistem: ' + err.message }) + '\n');
+        res.end();
+    }
+});
+
+
 // Cetak Laporan (Ringkas)
 app.get('/print', async (req, res) => {
     try {
