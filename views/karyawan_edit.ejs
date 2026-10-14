@@ -26,10 +26,10 @@
         
         <h1>Edit Karyawan</h1>
         
-        <form action="/karyawan/edit/<%= k.id %>" method="POST">
+        <form action="/karyawan/edit/<%= k.uid %>" method="POST">
             <div>
-                <label>UID Mesin Absen</label>
-                <input type="number" name="uid" value="<%= k.uid %>" required>
+                <label>UID/PIN Mesin Absen</label>
+                <input type="text" name="uid" value="<%= k.uid %>" required>
             </div>
             <div>
                 <label>Nama Karyawan</label>
