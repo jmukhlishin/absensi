@@ -486,6 +486,28 @@
         .status-offline { color: #dc2626; }
         .status-syncing { color: var(--dark-yellow); }
 
+        .btn-edit-machine {
+            margin-top: 10px;
+            padding: 7px 12px;
+            font-size: 12.5px;
+            font-weight: 700;
+            background: var(--light-blue);
+            color: var(--primary-blue);
+            border: 1px solid #90caf9;
+            border-radius: 8px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+        }
+        .btn-edit-machine:hover {
+            background: var(--primary-yellow);
+            color: var(--primary-blue);
+            border-color: var(--primary-yellow);
+            transform: translateY(-1px);
+        }
+
         .btn-sync {
             width: 100%;
             padding: 10px 12px;
@@ -853,8 +875,15 @@
                 <p id="clock">00:00:00</p>
             </div>
             <div class="info-card">
-                <h3>Status Mesin (IP: 192.168.0.11)</h3>
+                <h3>Status Mesin (IP: <span id="machine-ip-display"><%= typeof machineIp !== 'undefined' ? machineIp : '192.168.0.11' %></span>:<span id="machine-port-display"><%= typeof machinePort !== 'undefined' ? machinePort : 4370 %></span>)</h3>
                 <p id="machine-status">Mengecek...</p>
+                <button type="button" class="btn-edit-machine" onclick="openMachineModal()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 20h9"></path>
+                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                    </svg>
+                    Edit Mesin
+                </button>
             </div>
             <div class="info-card">
                 <h3>Total Karyawan</h3>
@@ -918,6 +947,30 @@
             <% if (currentPage < totalPages) { %>
                 <a href="/?page=<%= currentPage + 1 %><%= searchParamStr %>" class="page-btn" data-page="<%= currentPage + 1 %>" onclick="changePage(<%= currentPage + 1 %>, event)" title="Halaman Selanjutnya">&rarr;</a>
             <% } %>
+        </div>
+    </div>
+
+    <!-- Modal Edit Mesin (IP Address & Port) -->
+    <div id="machine-modal" class="account-modal-overlay" onclick="handleModalOverlayClick(event, 'machine-modal')">
+        <div class="account-modal-card">
+            <div class="account-modal-header">
+                <h3>Pengaturan Mesin Absensi</h3>
+                <button type="button" class="btn-close-x" onclick="closeMachineModal()" title="Tutup">&times;</button>
+            </div>
+            <form class="account-form" action="/machine/update" method="POST">
+                <div class="account-form-group">
+                    <label for="machine-ip">IP Address Mesin</label>
+                    <input type="text" id="machine-ip" name="ip" value="<%= typeof machineIp !== 'undefined' ? machineIp : '192.168.0.11' %>" placeholder="Contoh: 192.168.0.11" required>
+                </div>
+                <div class="account-form-group">
+                    <label for="machine-port">Port Mesin (Default: 4370)</label>
+                    <input type="number" id="machine-port" name="port" value="<%= typeof machinePort !== 'undefined' ? machinePort : 4370 %>" placeholder="4370" required>
+                </div>
+                <div class="account-modal-actions">
+                    <button type="button" class="btn-cancel" onclick="closeMachineModal()">Batal</button>
+                    <button type="submit" class="btn-save">Simpan</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -1014,6 +1067,16 @@
             }
         });
 
+        function openMachineModal() {
+            const modal = document.getElementById('machine-modal');
+            if (modal) modal.classList.add('active');
+        }
+
+        function closeMachineModal() {
+            const modal = document.getElementById('machine-modal');
+            if (modal) modal.classList.remove('active');
+        }
+
         function openProfileModal() {
             const dropdown = document.getElementById('profile-dropdown');
             if (dropdown) dropdown.classList.remove('show');
@@ -1057,6 +1120,14 @@
                 const res = await fetch('/api/machine-status');
                 const data = await res.json();
                 const statusEl = document.getElementById('machine-status');
+                if (data.ip) {
+                    const ipEl = document.getElementById('machine-ip-display');
+                    if (ipEl) ipEl.innerText = data.ip;
+                }
+                if (data.port) {
+                    const portEl = document.getElementById('machine-port-display');
+                    if (portEl) portEl.innerText = data.port;
+                }
                 if (data.syncing) {
                     statusEl.innerHTML = '<span class="status-syncing">Sedang Sinkronisasi...</span>';
                 } else if (data.status === 'Online') {
