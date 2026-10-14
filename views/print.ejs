@@ -7,15 +7,17 @@
     <style>
         @page {
             size: landscape;
-            margin: 10mm;
+            margin: 6mm;
         }
         * { box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0;
-            padding: 20px;
+            padding: 16px;
             color: #1e293b;
             background-color: #fff;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
         }
         .container {
             width: 100%;
@@ -24,14 +26,20 @@
         }
         h1, h2, h3 {
             text-align: center;
-            margin: 0 0 6px 0;
+            margin: 0 0 4px 0;
             color: #0d47a1;
+        }
+        h1 {
+            font-size: 20px;
+        }
+        h3 {
+            font-size: 13px;
         }
         .date {
             text-align: center;
-            margin-bottom: 16px;
+            margin-bottom: 12px;
             font-style: italic;
-            font-size: 13px;
+            font-size: 12px;
             color: #475569;
         }
         .table-wrapper {
@@ -41,14 +49,16 @@
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 10px;
-            font-size: 11px;
+            margin-top: 6px;
+            font-size: 10px;
+            table-layout: auto;
         }
         th, td {
             border: 1px solid #334155;
-            padding: 6px 8px;
+            padding: 4px 5px;
             text-align: center;
             white-space: nowrap;
+            line-height: 1.2;
         }
         th {
             background-color: #0d47a1;
@@ -60,7 +70,8 @@
         th.sub-header {
             background-color: #fff8e1;
             color: #0d47a1;
-            font-size: 10px;
+            font-size: 9px;
+            padding: 2px 3px;
         }
         td.emp-name {
             text-align: left;
@@ -72,19 +83,122 @@
         tr:nth-child(even) td {
             background-color: #f8fafc;
         }
+        .time-stack {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            line-height: 1.15;
+            gap: 1px;
+        }
+        .time-in {
+            color: #0d47a1;
+            font-weight: 700;
+        }
+        .time-out {
+            color: #b45309;
+            font-weight: 600;
+            border-top: 1px dotted #cbd5e1;
+            width: 100%;
+            padding-top: 1px;
+        }
+        /* Skala proporsional saat rentang tanggal panjang (hingga 30-31 hari sebulan) */
+        table.compact-month {
+            table-layout: fixed;
+            font-size: 7.5px;
+        }
+        table.compact-month th,
+        table.compact-month td {
+            padding: 2px 1px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        table.compact-month th.col-no,
+        table.compact-month td.col-no {
+            width: 22px;
+            min-width: 22px;
+            max-width: 22px;
+        }
+        table.compact-month th.col-name,
+        table.compact-month td.emp-name {
+            width: 110px;
+            min-width: 110px;
+            max-width: 110px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding-left: 4px;
+            font-size: 8px;
+        }
         @media print {
             @page {
                 size: landscape;
+                margin: 5mm;
+            }
+            html, body {
+                width: 100%;
+                margin: 0;
+                padding: 0;
+                background: #fff;
             }
             .no-print { display: none !important; }
-            body { padding: 0; }
-            .table-wrapper { overflow: visible; }
-            td.emp-name { position: static; }
+            .container {
+                width: 100%;
+                max-width: 100%;
+            }
+            h1 { font-size: 15px; margin-bottom: 2px; }
+            h3 { font-size: 11px; margin-bottom: 2px; }
+            .date { font-size: 9.5px; margin-bottom: 6px; }
+            .table-wrapper {
+                overflow: visible !important;
+                width: 100%;
+            }
+            table {
+                width: 100% !important;
+                max-width: 100% !important;
+                page-break-inside: auto;
+            }
+            thead {
+                display: table-header-group;
+            }
+            tr {
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
+            td.emp-name {
+                position: static !important;
+            }
+            table.compact-month {
+                font-size: 6.5px;
+            }
+            table.compact-month th.sub-header {
+                font-size: 6px;
+                padding: 1px 0;
+            }
+            table.compact-month th,
+            table.compact-month td {
+                padding: 1.5px 0.5px;
+                line-height: 1.1;
+            }
+            table.compact-month th.col-no,
+            table.compact-month td.col-no {
+                width: 18px;
+                min-width: 18px;
+                max-width: 18px;
+            }
+            table.compact-month th.col-name,
+            table.compact-month td.emp-name {
+                width: 90px;
+                min-width: 90px;
+                max-width: 90px;
+                font-size: 7px;
+                padding-left: 3px;
+            }
         }
         .btn-print {
             display: block;
             width: 180px;
-            margin: 20px auto;
+            margin: 16px auto;
             padding: 10px 16px;
             text-align: center;
             background-color: #0d47a1;
@@ -106,7 +220,7 @@
     <div class="container">
         <h1>Rekap Kehadiran Karyawan</h1>
         <% if (typeof start !== 'undefined' && typeof end !== 'undefined' && start && end) { %>
-            <h3 style="margin-bottom: 6px;">Periode: <%= start %> s/d <%= end %></h3>
+            <h3 style="margin-bottom: 4px;">Periode: <%= start %> s/d <%= end %></h3>
         <% } %>
         <div class="date">Dicetak pada: <span id="print-date"></span></div>
         
@@ -131,28 +245,50 @@
 
             const dates = Array.from(dateSet).sort();
             const employees = Array.from(empMap.keys()).sort((a, b) => a.localeCompare(b));
+            const isCompactMonth = dates.length > 10;
+
+            function formatShortDate(tglStr) {
+                if (!tglStr) return '';
+                const parts = tglStr.split('-');
+                if (parts.length === 3) {
+                    return isCompactMonth ? `${parts[2]}/${parts[1]}` : tglStr;
+                }
+                return tglStr;
+            }
         %>
 
         <div class="table-wrapper">
-            <table>
+            <table class="<%= isCompactMonth ? 'compact-month' : '' %>">
                 <thead>
                     <tr>
-                        <th rowspan="2" style="min-width: 36px;">No</th>
-                        <th rowspan="2" style="text-align: left; min-width: 150px;">Nama Karyawan</th>
+                        <th rowspan="2" class="col-no" style="<%= isCompactMonth ? '' : 'min-width: 32px;' %>">No</th>
+                        <th rowspan="2" class="col-name" style="text-align: left; <%= isCompactMonth ? '' : 'min-width: 140px;' %>">Nama Karyawan</th>
                         <% if (dates.length > 0) { %>
-                            <% dates.forEach(tgl => { %>
-                                <th colspan="2"><%= tgl %></th>
-                            <% }) %>
+                            <% if (isCompactMonth) { %>
+                                <% dates.forEach(tgl => { %>
+                                    <th><%= formatShortDate(tgl) %></th>
+                                <% }) %>
+                            <% } else { %>
+                                <% dates.forEach(tgl => { %>
+                                    <th colspan="2"><%= formatShortDate(tgl) %></th>
+                                <% }) %>
+                            <% } %>
                         <% } else { %>
                             <th>Tanggal</th>
                         <% } %>
                     </tr>
                     <tr>
                         <% if (dates.length > 0) { %>
-                            <% dates.forEach(() => { %>
-                                <th class="sub-header">Masuk</th>
-                                <th class="sub-header">Pulang</th>
-                            <% }) %>
+                            <% if (isCompactMonth) { %>
+                                <% dates.forEach(() => { %>
+                                    <th class="sub-header">M / P</th>
+                                <% }) %>
+                            <% } else { %>
+                                <% dates.forEach(() => { %>
+                                    <th class="sub-header">Masuk</th>
+                                    <th class="sub-header">Pulang</th>
+                                <% }) %>
+                            <% } %>
                         <% } else { %>
                             <th class="sub-header">-</th>
                         <% } %>
@@ -162,21 +298,30 @@
                     <% if (employees.length > 0 && dates.length > 0) { %>
                         <% employees.forEach((empName, idx) => { %>
                             <tr>
-                                <td><%= idx + 1 %></td>
+                                <td class="col-no"><%= idx + 1 %></td>
                                 <td class="emp-name"><%= empName %></td>
                                 <% dates.forEach(tgl => { 
                                     const rec = empMap.get(empName)[tgl];
-                                    const checkIn = rec ? rec.in : '-';
-                                    const checkOut = rec ? (rec.in === rec.out ? '-' : rec.out) : '-';
+                                    const checkIn = rec && rec.in ? rec.in : '-';
+                                    const checkOut = rec && rec.out ? (rec.in === rec.out ? '-' : rec.out) : '-';
                                 %>
-                                    <td><%= checkIn %></td>
-                                    <td><%= checkOut %></td>
+                                    <% if (isCompactMonth) { %>
+                                        <td>
+                                            <div class="time-stack">
+                                                <span class="time-in"><%= checkIn %></span>
+                                                <span class="time-out"><%= checkOut %></span>
+                                            </div>
+                                        </td>
+                                    <% } else { %>
+                                        <td><%= checkIn %></td>
+                                        <td><%= checkOut %></td>
+                                    <% } %>
                                 <% }) %>
                             </tr>
                         <% }) %>
                     <% } else { %>
                         <tr>
-                            <td colspan="<%= dates.length > 0 ? (dates.length * 2 + 2) : 3 %>" style="text-align: center; padding: 20px;">Tidak ada data kehadiran.</td>
+                            <td colspan="<%= dates.length > 0 ? (isCompactMonth ? (dates.length + 2) : (dates.length * 2 + 2)) : 3 %>" style="text-align: center; padding: 20px;">Tidak ada data kehadiran.</td>
                         </tr>
                     <% } %>
                 </tbody>
