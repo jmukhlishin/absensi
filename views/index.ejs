@@ -60,8 +60,9 @@
                 <p><%= totalKaryawan %> Orang</p>
             </div>
             <div class="info-card">
-                <h3>Sinkronisasi Otomatis Berjalan</h3>
-                <button type="button" onclick="syncMachine()" style="width: 100%; padding: 8px; font-size:14px; background: #17a2b8;">Tarik Data Manual</button>
+                <h3>Sinkronisasi Manual</h3>
+                <button type="button" onclick="syncKaryawan()" style="width: 100%; padding: 8px; font-size:14px; background: #17a2b8; margin-bottom: 8px;">Tarik Data Karyawan</button>
+                <button type="button" onclick="syncAbsensi()" style="width: 100%; padding: 8px; font-size:14px; background: #28a745;">Tarik Data Absensi</button>
             </div>
         </div>
         
@@ -69,7 +70,7 @@
         <table>
             <thead>
                 <tr>
-                    <th>ID</th>
+                    <th>ID Log</th>
                     <th>Nama</th>
                     <th>Waktu (Check-In / Out)</th>
                     <th>Status</th>
@@ -80,7 +81,7 @@
                     <% data.forEach(row => { %>
                         <tr>
                             <td><%= row.id %></td>
-                            <td><%= row.nama %></td>
+                            <td><%= row.nama || 'Tidak Diketahui' %></td>
                             <td><%= row.waktu %></td>
                             <td><%= row.status %></td>
                         </tr>
@@ -133,7 +134,7 @@
                     data.forEach(row => {
                         html += `<tr>
                             <td>${row.id}</td>
-                            <td>${row.nama}</td>
+                            <td>${row.nama || 'Tidak Diketahui'}</td>
                             <td>${row.waktu}</td>
                             <td>${row.status}</td>
                         </tr>`;
@@ -149,23 +150,38 @@
         // Background Auto-Sync dari Mesin
         async function backgroundSync() {
             try {
-                await fetch('/api/sync-machine');
+                await fetch('/api/sync-absensi');
             } catch (e) { }
         }
         setInterval(backgroundSync, 30000); // Sinkronisasi otomatis dari mesin tiap 30 detik
 
-        // Tarik Data Manual
-        async function syncMachine() {
-            alert('Proses penarikan data dari mesin dimulai, harap tunggu...');
+        // Tarik Data Karyawan
+        async function syncKaryawan() {
+            alert('Proses tarik data karyawan dari mesin dimulai, harap tunggu...');
             try {
-                const res = await fetch('/api/sync-machine');
+                const res = await fetch('/api/sync-karyawan');
+                const data = await res.json();
+                alert(data.message);
+                if(data.success) {
+                    window.location.reload(); // Reload untuk update jumlah total karyawan
+                }
+            } catch (err) {
+                alert('Terjadi kesalahan saat menarik data karyawan.');
+            }
+        }
+
+        // Tarik Data Absensi
+        async function syncAbsensi() {
+            alert('Proses tarik data absensi dari mesin dimulai, harap tunggu...');
+            try {
+                const res = await fetch('/api/sync-absensi');
                 const data = await res.json();
                 alert(data.message);
                 if(data.success) {
                     fetchLatestAbsensi();
                 }
             } catch (err) {
-                alert('Terjadi kesalahan saat menarik data.');
+                alert('Terjadi kesalahan saat menarik data absensi.');
             }
         }
     </script>
