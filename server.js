@@ -33,8 +33,19 @@ const db = new sqlite3.Database(dbPath, (err) => {
             // Table Karyawan (uid is the deviceUserId/userId) - Persisten tanpa DROP TABLE
             db.run(`CREATE TABLE IF NOT EXISTS karyawan (
                 uid TEXT PRIMARY KEY,
-                nama TEXT NOT NULL
+                nama TEXT NOT NULL,
+                jabatan TEXT DEFAULT ''
             )`);
+
+            // Pastikan kolom jabatan tersedia untuk database yang sudah ada sebelumnya
+            db.all(`PRAGMA table_info(karyawan)`, (pragmaErr, columns) => {
+                if (!pragmaErr && Array.isArray(columns)) {
+                    const hasJabatan = columns.some(col => col.name === 'jabatan');
+                    if (!hasJabatan) {
+                        db.run(`ALTER TABLE karyawan ADD COLUMN jabatan TEXT DEFAULT ''`);
+                    }
+                }
+            });
 
             // Table Absensi - Persisten tanpa DROP TABLE
             db.run(`CREATE TABLE IF NOT EXISTS absensi (
@@ -216,25 +227,39 @@ app.post('/absen', (req, res) => {
 
 // CRUD Karyawan - List
 app.get('/karyawan', (req, res) => {
-    db.all('SELECT * FROM karyawan ORDER BY CAST(uid AS INTEGER) ASC, uid ASC', [], (err, rows) => {
+    db.all('SELECT uid, nama, COALESCE(jabatan, "") as jabatan FROM karyawan ORDER BY CAST(uid AS INTEGER) ASC, uid ASC', [], (err, rows) => {
         if (err) return res.status(500).send('Gagal memuat data karyawan.');
         res.render('karyawan', { karyawan: rows });
     });
 });
 
 // CRUD Karyawan - Add
-app.post('/karyawan/add', (req, res) => {
-    const { uid, nama } = req.body;
-    db.run('INSERT OR REPLACE INTO karyawan (uid, nama) VALUES (?, ?)', [uid, nama], () => {
+app.post('/karyawan/add', async (req, res) => {
+    try {
+        let { uid, nama, jabatan } = req.body;
+        nama = (nama || '').trim();
+        jabatan = (jabatan || '').trim();
+        uid = (uid || '').trim();
+
+        if (!uid) {
+            const row = await dbGet('SELECT MAX(CAST(uid AS INTEGER)) as maxUid FROM karyawan');
+            const nextUid = (row && row.maxUid) ? (parseInt(row.maxUid, 10) + 1) : 1;
+            uid = String(nextUid);
+        }
+
+        await dbRun('INSERT OR REPLACE INTO karyawan (uid, nama, jabatan) VALUES (?, ?, ?)', [uid, nama, jabatan]);
         res.redirect('/karyawan');
-    });
+    } catch (err) {
+        console.error('Gagal menambah karyawan:', err);
+        res.redirect('/karyawan');
+    }
 });
 
 // CRUD Karyawan - Edit (Form)
 app.get('/karyawan/edit/:uid', (req, res) => {
     const uid = req.params.uid;
-    db.get('SELECT * FROM karyawan WHERE uid = ?', [uid], (err, row) => {
-        if (err) return res.status(500).send('Gagal memuat data karyawan.');
+    db.get('SELECT uid, nama, COALESCE(jabatan, "") as jabatan FROM karyawan WHERE uid = ?', [uid], (err, row) => {
+        if (err || !row) return res.redirect('/karyawan');
         res.render('karyawan_edit', { k: row });
     });
 });
@@ -242,8 +267,10 @@ app.get('/karyawan/edit/:uid', (req, res) => {
 // CRUD Karyawan - Update
 app.post('/karyawan/edit/:uid', (req, res) => {
     const old_uid = req.params.uid;
-    const { uid, nama } = req.body;
-    db.run('UPDATE karyawan SET uid = ?, nama = ? WHERE uid = ?', [uid, nama, old_uid], () => {
+    const uid = (req.body.uid || old_uid).trim();
+    const nama = (req.body.nama || '').trim();
+    const jabatan = (req.body.jabatan || '').trim();
+    db.run('UPDATE karyawan SET uid = ?, nama = ?, jabatan = ? WHERE uid = ?', [uid, nama, jabatan, old_uid], () => {
         res.redirect('/karyawan');
     });
 });
@@ -337,7 +364,13 @@ async function runSyncKaryawan(ip) {
                 const uid = String(user.userId || user.uid || '').trim();
                 if (!uid) continue;
                 const nama = (user.name && String(user.name).trim()) ? String(user.name).trim() : `User ${uid}`;
-                await dbRun('INSERT OR REPLACE INTO karyawan (uid, nama) VALUES (?, ?)', [uid, nama]);
+                // Pertahankan jabatan yang sudah ada bila karyawan pernah diinput/diedit
+                await dbRun(
+                    `INSERT INTO karyawan (uid, nama, jabatan)
+                     VALUES (?, ?, COALESCE((SELECT jabatan FROM karyawan WHERE uid = ?), ''))
+                     ON CONFLICT(uid) DO UPDATE SET nama = excluded.nama`,
+                    [uid, nama, uid]
+                );
                 savedCount++;
             }
 
