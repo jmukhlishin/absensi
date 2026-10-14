@@ -23,26 +23,35 @@ const db = new sqlite3.Database('./absensi.db', (err) => {
     } else {
         console.log('Connected to the SQLite database.');
         
-        // Table Absensi
-        db.run(`CREATE TABLE IF NOT EXISTS absensi (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nama TEXT NOT NULL,
-            waktu TEXT NOT NULL,
-            status TEXT NOT NULL
-        )`);
-        
-        // Table Karyawan
-        db.run(`CREATE TABLE IF NOT EXISTS karyawan (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            uid INTEGER,
-            nama TEXT NOT NULL
-        )`);
+        // Agar schema tidak berantakan dengan database lama, kita drop dan create ulang khusus di task ini.
+        db.serialize(() => {
+            db.run(`DROP TABLE IF EXISTS absensi`);
+            db.run(`DROP TABLE IF EXISTS karyawan`);
+            
+            // Table Karyawan (uid is the deviceUserId/userId)
+            db.run(`CREATE TABLE IF NOT EXISTS karyawan (
+                uid TEXT PRIMARY KEY,
+                nama TEXT NOT NULL
+            )`);
+            
+            // Table Absensi
+            db.run(`CREATE TABLE IF NOT EXISTS absensi (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uid TEXT NOT NULL,
+                waktu TEXT NOT NULL,
+                status TEXT NOT NULL,
+                FOREIGN KEY (uid) REFERENCES karyawan(uid)
+            )`);
+        });
     }
 });
 
 // Dashboard Route
 app.get('/', (req, res) => {
-    db.all('SELECT * FROM absensi ORDER BY waktu DESC LIMIT 10', [], (err, absensiData) => {
+    db.all(`SELECT a.id, k.nama, a.waktu, a.status 
+            FROM absensi a 
+            LEFT JOIN karyawan k ON a.uid = k.uid 
+            ORDER BY a.waktu DESC LIMIT 10`, [], (err, absensiData) => {
         if (err) throw err;
         db.get('SELECT COUNT(*) as total FROM karyawan', [], (err, row) => {
             if (err) throw err;
@@ -58,7 +67,10 @@ app.get('/', (req, res) => {
 
 // API Get Latest Absensi (Realtime Update)
 app.get('/api/latest-absensi', (req, res) => {
-    db.all('SELECT * FROM absensi ORDER BY waktu DESC LIMIT 10', [], (err, rows) => {
+    db.all(`SELECT a.id, k.nama, a.waktu, a.status 
+            FROM absensi a 
+            LEFT JOIN karyawan k ON a.uid = k.uid 
+            ORDER BY a.waktu DESC LIMIT 10`, [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows);
     });
@@ -66,16 +78,16 @@ app.get('/api/latest-absensi', (req, res) => {
 
 // Manual Absensi 
 app.post('/absen', (req, res) => {
-    const { nama, status } = req.body;
+    const { uid, status } = req.body;
     const waktu = moment().format('YYYY-MM-DD HH:mm:ss');
-    db.run(`INSERT INTO absensi (nama, waktu, status) VALUES (?, ?, ?)`, [nama, waktu, status], (err) => {
+    db.run(`INSERT INTO absensi (uid, waktu, status) VALUES (?, ?, ?)`, [uid, waktu, status], (err) => {
         res.redirect('/');
     });
 });
 
 // CRUD Karyawan - List
 app.get('/karyawan', (req, res) => {
-    db.all('SELECT * FROM karyawan ORDER BY id DESC', [], (err, rows) => {
+    db.all('SELECT * FROM karyawan ORDER BY uid ASC', [], (err, rows) => {
         if (err) throw err;
         res.render('karyawan', { karyawan: rows });
     });
@@ -90,39 +102,40 @@ app.post('/karyawan/add', (req, res) => {
 });
 
 // CRUD Karyawan - Edit (Form)
-app.get('/karyawan/edit/:id', (req, res) => {
-    const id = req.params.id;
-    db.get('SELECT * FROM karyawan WHERE id = ?', [id], (err, row) => {
+app.get('/karyawan/edit/:uid', (req, res) => {
+    const uid = req.params.uid;
+    db.get('SELECT * FROM karyawan WHERE uid = ?', [uid], (err, row) => {
         if (err) throw err;
+        // Menggunakan view yang ada tetapi datanya disesuaikan
         res.render('karyawan_edit', { k: row });
     });
 });
 
 // CRUD Karyawan - Update
-app.post('/karyawan/edit/:id', (req, res) => {
-    const id = req.params.id;
+app.post('/karyawan/edit/:uid', (req, res) => {
+    const old_uid = req.params.uid;
     const { uid, nama } = req.body;
-    db.run('UPDATE karyawan SET uid = ?, nama = ? WHERE id = ?', [uid, nama, id], (err) => {
+    db.run('UPDATE karyawan SET uid = ?, nama = ? WHERE uid = ?', [uid, nama, old_uid], (err) => {
         res.redirect('/karyawan');
     });
 });
 
 // CRUD Karyawan - Delete
-app.get('/karyawan/delete/:id', (req, res) => {
-    const id = req.params.id;
-    db.run('DELETE FROM karyawan WHERE id = ?', [id], (err) => {
+app.get('/karyawan/delete/:uid', (req, res) => {
+    const uid = req.params.uid;
+    db.run('DELETE FROM karyawan WHERE uid = ?', [uid], (err) => {
         res.redirect('/karyawan');
     });
 });
 
 // Cetak Laporan (Ringkas)
 app.get('/print', (req, res) => {
-    // Process check_in and check_out per date per user
     const query = `
-        SELECT nama, date(waktu) as tanggal, MIN(time(waktu)) as check_in, MAX(time(waktu)) as check_out
-        FROM absensi
-        GROUP BY nama, date(waktu)
-        ORDER BY tanggal DESC, nama ASC
+        SELECT k.nama, date(a.waktu) as tanggal, MIN(time(a.waktu)) as check_in, MAX(time(a.waktu)) as check_out
+        FROM absensi a
+        LEFT JOIN karyawan k ON a.uid = k.uid
+        GROUP BY a.uid, k.nama, date(a.waktu)
+        ORDER BY tanggal DESC, k.nama ASC
     `;
     db.all(query, [], (err, rows) => {
         if (err) throw err;
@@ -130,31 +143,56 @@ app.get('/print', (req, res) => {
     });
 });
 
-// Sync from Machine (ZKTeco / Solution)
-app.get('/api/sync-machine', async (req, res) => {
-    const ip = req.query.ip || '192.168.0.11'; // IP Mesin Updated
+// Sync Karyawan dari Mesin (ZKTeco / Solution)
+app.get('/api/sync-karyawan', async (req, res) => {
+    const ip = req.query.ip || '192.168.0.11'; 
     const zkInstance = new ZKLib(ip, 4370, 10000, 4000);
     try {
         await zkInstance.createSocket();
-        const logs = await zkInstance.getAttendances();
         const users = await zkInstance.getUsers();
         
-        if (logs && logs.data) {
-            for (let log of logs.data) {
-                const user = users.data.find(u => u.uid === log.deviceUserId);
-                const nama = user ? user.name : 'UID:' + log.deviceUserId;
-                const waktu = moment(log.recordTime).format('YYYY-MM-DD HH:mm:ss');
-                const status = 'Mesin';
+        if (users && users.data) {
+            for (let user of users.data) {
+                const uid = user.userId;
+                const nama = user.name || \`User \${uid}\`;
                 
                 await new Promise((resolve) => {
-                    db.run('INSERT INTO absensi (nama, waktu, status) SELECT ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM absensi WHERE nama=? AND waktu=?)', 
-                        [nama, waktu, status, nama, waktu], resolve);
+                    db.run('INSERT OR REPLACE INTO karyawan (uid, nama) VALUES (?, ?)', 
+                        [uid, nama], resolve);
                 });
             }
         }
         
         await zkInstance.disconnect();
-        res.json({ success: true, message: 'Sinkronisasi berhasil!' });
+        res.json({ success: true, message: 'Data karyawan berhasil ditarik dan disinkronisasi!' });
+    } catch (e) {
+        res.json({ success: false, message: e.message || 'Gagal koneksi ke mesin absensi.' });
+    }
+});
+
+// Sync Absensi dari Mesin
+app.get('/api/sync-absensi', async (req, res) => {
+    const ip = req.query.ip || '192.168.0.11';
+    const zkInstance = new ZKLib(ip, 4370, 10000, 4000);
+    try {
+        await zkInstance.createSocket();
+        const logs = await zkInstance.getAttendances();
+        
+        if (logs && logs.data) {
+            for (let log of logs.data) {
+                const uid = log.deviceUserId;
+                const waktu = moment(log.recordTime).format('YYYY-MM-DD HH:mm:ss');
+                const status = 'Mesin';
+                
+                await new Promise((resolve) => {
+                    db.run('INSERT INTO absensi (uid, waktu, status) SELECT ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM absensi WHERE uid=? AND waktu=?)', 
+                            [uid, waktu, status, uid, waktu], resolve);
+                });
+            }
+        }
+        
+        await zkInstance.disconnect();
+        res.json({ success: true, message: 'Data absensi berhasil ditarik!' });
     } catch (e) {
         res.json({ success: false, message: e.message || 'Gagal koneksi ke mesin absensi.' });
     }
@@ -174,5 +212,5 @@ app.get('/api/machine-status', async (req, res) => {
 });
 
 app.listen(port, () => {
-    console.log(`Server berjalan di http://localhost:${port}`);
+    console.log(\`Server berjalan di http://localhost:\${port}\`);
 });
