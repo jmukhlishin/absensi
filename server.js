@@ -74,7 +74,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
                             );
                             db.run(
                                 `INSERT INTO akun (nama, username, password, role) VALUES (?, ?, ?, ?)`,
-                                ['Julio', 'admin', 'admin123', 'admin']
+                                ['Admin', 'admin', 'admin123', 'superadmin']
                             );
                         }
                     });
