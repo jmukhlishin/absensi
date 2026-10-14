@@ -49,6 +49,15 @@ const db = new sqlite3.Database(dbPath, (err) => {
             db.run(`PRAGMA journal_mode = WAL`);
             db.run(`PRAGMA busy_timeout = 5000`);
 
+            // Table Pengaturan Mesin (key-value)
+            db.run(`CREATE TABLE IF NOT EXISTS pengaturan (
+                kunci TEXT PRIMARY KEY,
+                nilai TEXT NOT NULL
+            )`, () => {
+                db.run(`INSERT OR IGNORE INTO pengaturan (kunci, nilai) VALUES ('machine_ip', '192.168.0.11')`);
+                db.run(`INSERT OR IGNORE INTO pengaturan (kunci, nilai) VALUES ('machine_port', '4370')`);
+            });
+
             // Table Akun (id, nama, username, password, role)
             db.run(`CREATE TABLE IF NOT EXISTS akun (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -146,6 +155,24 @@ function yieldEventLoop() {
     return new Promise((resolve) => setImmediate(resolve));
 }
 
+// Helper konfigurasi mesin (IP & Port)
+async function getMachineConfig() {
+    try {
+        const rows = await dbAll(`SELECT kunci, nilai FROM pengaturan WHERE kunci IN ('machine_ip', 'machine_port')`);
+        let ip = '192.168.0.11';
+        let port = 4370;
+        if (Array.isArray(rows)) {
+            rows.forEach(r => {
+                if (r.kunci === 'machine_ip' && r.nilai) ip = r.nilai;
+                if (r.kunci === 'machine_port' && r.nilai) port = parseInt(r.nilai, 10) || 4370;
+            });
+        }
+        return { ip, port };
+    } catch (e) {
+        return { ip: '192.168.0.11', port: 4370 };
+    }
+}
+
 // Middleware Autentikasi Akun
 async function requireAuth(req, res, next) {
     try {
@@ -223,6 +250,29 @@ app.get('/logout', (req, res) => {
 
 // Proteksi seluruh route di bawah ini dengan login
 app.use(requireAuth);
+
+// Route Update Konfigurasi Mesin (IP Address & Port)
+app.post('/machine/update', async (req, res) => {
+    try {
+        const ip = (req.body.ip || '').trim();
+        const portVal = parseInt(req.body.port, 10) || 4370;
+
+        if (!ip) {
+            return res.redirect('/?msg=' + encodeURIComponent('IP Address mesin tidak boleh kosong!') + '&type=error');
+        }
+
+        await dbRun(`INSERT OR REPLACE INTO pengaturan (kunci, nilai) VALUES ('machine_ip', ?)`, [ip]);
+        await dbRun(`INSERT OR REPLACE INTO pengaturan (kunci, nilai) VALUES ('machine_port', ?)`, [String(portVal)]);
+
+        // Reset cache pengecekan status mesin agar langsung mengecek IP & Port baru
+        lastMachineCheckTime = 0;
+
+        res.redirect('/?msg=' + encodeURIComponent(`Pengaturan mesin berhasil diperbarui (${ip}:${portVal})!`) + '&type=success');
+    } catch (err) {
+        console.error('Gagal update pengaturan mesin:', err);
+        res.redirect('/?msg=' + encodeURIComponent('Gagal memperbarui pengaturan mesin.') + '&type=error');
+    }
+});
 
 // Route Update Profil (nama dan password bisa diganti, username tidak bisa diganti)
 app.post('/profile/update', async (req, res) => {
@@ -452,10 +502,11 @@ app.get('/', async (req, res) => {
 
         const { listSql, countSql, searchParam, searchTerm } = buildAbsensiQuery(search);
 
-        const [absensiData, totalRow, karyawanRow] = await Promise.all([
+        const [absensiData, totalRow, karyawanRow, machineConfig] = await Promise.all([
             dbAll(listSql, [...searchParam, limit, offset]),
             dbGet(countSql, searchParam),
-            dbGet('SELECT COUNT(*) as total FROM karyawan')
+            dbGet('SELECT COUNT(*) as total FROM karyawan'),
+            getMachineConfig()
         ]);
 
         const totalAbsensi = totalRow ? totalRow.total : 0;
@@ -474,7 +525,9 @@ app.get('/', async (req, res) => {
             msgType: msgType,
             currentPage: page,
             totalPages: totalPages,
-            searchQuery: searchTerm
+            searchQuery: searchTerm,
+            machineIp: machineConfig.ip,
+            machinePort: machineConfig.port
         });
     } catch (err) {
         console.error('Error rendering dashboard:', err);
@@ -610,41 +663,48 @@ app.get('/karyawan/delete/:uid', (req, res) => {
 });
 
 // Cetak Laporan (Ringkas)
-app.get('/print', (req, res) => {
-    const start = req.query.start;
-    const end = req.query.end;
+app.get('/print', async (req, res) => {
+    try {
+        const start = req.query.start;
+        const end = req.query.end;
 
-    let query = `
-        ${FILTERED_ABSENSI_CTE}
-        SELECT 
-            a.uid, 
-            COALESCE(k.nama, 'User ' || a.uid) as nama, 
-            date(a.waktu) as tanggal, 
-            MIN(CASE WHEN a.status = 'Masuk' THEN time(a.waktu) END) as check_in, 
-            MAX(CASE WHEN a.status = 'Pulang' THEN time(a.waktu) END) as check_out
-        FROM ValidAbsensi a
-        LEFT JOIN karyawan k ON a.uid = k.uid
-    `;
-    const params = [];
+        let query = `
+            ${FILTERED_ABSENSI_CTE}
+            SELECT 
+                a.uid, 
+                COALESCE(k.nama, 'User ' || a.uid) as nama, 
+                date(a.waktu) as tanggal, 
+                MIN(CASE WHEN a.status = 'Masuk' THEN time(a.waktu) END) as check_in, 
+                MAX(CASE WHEN a.status = 'Pulang' THEN time(a.waktu) END) as check_out
+            FROM ValidAbsensi a
+            LEFT JOIN karyawan k ON a.uid = k.uid
+        `;
+        const params = [];
 
-    if (start && end) {
-        query += ` WHERE date(a.waktu) >= ? AND date(a.waktu) <= ?`;
-        params.push(start, end);
+        if (start && end) {
+            query += ` WHERE date(a.waktu) >= ? AND date(a.waktu) <= ?`;
+            params.push(start, end);
+        }
+
+        query += `
+            GROUP BY a.uid, k.nama, date(a.waktu)
+            ORDER BY tanggal ASC, nama ASC
+        `;
+
+        const [rows, allKaryawan] = await Promise.all([
+            dbAll(query, params),
+            dbAll(`SELECT uid, nama FROM karyawan ORDER BY nama ASC`)
+        ]);
+
+        res.render('print', { laporan: rows, semuaKaryawan: allKaryawan, start, end });
+    } catch (err) {
+        console.error('Error mencetak laporan:', err);
+        res.status(500).send('Gagal mencetak laporan.');
     }
-
-    query += `
-        GROUP BY a.uid, k.nama, date(a.waktu)
-        ORDER BY tanggal ASC, nama ASC
-    `;
-
-    db.all(query, params, (err, rows) => {
-        if (err) return res.status(500).send('Gagal mencetak laporan.');
-        res.render('print', { laporan: rows, start, end });
-    });
 });
 
 // Fungsi Asynchronous/Non-Blocking untuk Download Data Karyawan
-async function runSyncKaryawan(ip) {
+async function runSyncKaryawan(ip, machinePort = 4370) {
     updateSyncState({
         isSyncing: true,
         type: 'karyawan',
@@ -656,7 +716,7 @@ async function runSyncKaryawan(ip) {
         message: 'Menghubungkan ke mesin absensi...'
     });
 
-    const zkInstance = new ZKLib(ip, 4370, 10000, 4000);
+    const zkInstance = new ZKLib(ip, machinePort, 10000, 4000);
     let socketCreated = false;
 
     try {
@@ -746,7 +806,7 @@ async function runSyncKaryawan(ip) {
 }
 
 // Fungsi Asynchronous/Non-Blocking & Incremental untuk Download Data Absensi
-async function runSyncAbsensi(ip) {
+async function runSyncAbsensi(ip, machinePort = 4370) {
     updateSyncState({
         isSyncing: true,
         type: 'absensi',
@@ -758,7 +818,7 @@ async function runSyncAbsensi(ip) {
         message: 'Mengecek data terakhir di database...'
     });
 
-    const zkInstance = new ZKLib(ip, 4370, 10000, 4000);
+    const zkInstance = new ZKLib(ip, machinePort, 10000, 4000);
     let socketCreated = false;
 
     try {
@@ -908,7 +968,9 @@ async function runSyncAbsensi(ip) {
 
 // Sync Karyawan dari Mesin (ZKTeco / Solution)
 app.get('/api/sync-karyawan', async (req, res) => {
-    const ip = req.query.ip || '192.168.0.11';
+    const config = await getMachineConfig();
+    const ip = req.query.ip || config.ip;
+    const machinePort = parseInt(req.query.port, 10) || config.port;
     const isBackground = req.query.background === '1' || req.query.async === '1';
 
     if (syncState.isSyncing) {
@@ -921,7 +983,7 @@ app.get('/api/sync-karyawan', async (req, res) => {
     }
 
     if (isBackground) {
-        runSyncKaryawan(ip);
+        runSyncKaryawan(ip, machinePort);
         return res.json({
             success: true,
             started: true,
@@ -930,13 +992,15 @@ app.get('/api/sync-karyawan', async (req, res) => {
         });
     }
 
-    const result = await runSyncKaryawan(ip);
+    const result = await runSyncKaryawan(ip, machinePort);
     res.json(result);
 });
 
 // Sync Absensi dari Mesin (Manual & Incremental)
 app.get('/api/sync-absensi', async (req, res) => {
-    const ip = req.query.ip || '192.168.0.11';
+    const config = await getMachineConfig();
+    const ip = req.query.ip || config.ip;
+    const machinePort = parseInt(req.query.port, 10) || config.port;
     const isBackground = req.query.background === '1' || req.query.async === '1';
 
     if (syncState.isSyncing) {
@@ -949,7 +1013,7 @@ app.get('/api/sync-absensi', async (req, res) => {
     }
 
     if (isBackground) {
-        runSyncAbsensi(ip);
+        runSyncAbsensi(ip, machinePort);
         return res.json({
             success: true,
             started: true,
@@ -958,7 +1022,7 @@ app.get('/api/sync-absensi', async (req, res) => {
         });
     }
 
-    const result = await runSyncAbsensi(ip);
+    const result = await runSyncAbsensi(ip, machinePort);
     res.json(result);
 });
 
@@ -968,30 +1032,32 @@ let lastMachineStatus = 'Offline';
 let lastMachineCheckTime = 0;
 
 app.get('/api/machine-status', async (req, res) => {
-    const ip = req.query.ip || '192.168.0.11';
+    const config = await getMachineConfig();
+    const ip = req.query.ip || config.ip;
+    const machinePort = parseInt(req.query.port, 10) || config.port;
 
     // Jika sedang sinkronisasi dengan mesin, jangan buka socket baru agar tidak bentrok/blocking
     if (syncState.isSyncing) {
-        return res.json({ status: 'Online', syncing: true });
+        return res.json({ status: 'Online', syncing: true, ip, port: machinePort });
     }
 
     const now = Date.now();
     if (isCheckingMachineStatus || (now - lastMachineCheckTime < 5000)) {
-        return res.json({ status: lastMachineStatus });
+        return res.json({ status: lastMachineStatus, ip, port: machinePort });
     }
 
     isCheckingMachineStatus = true;
-    const zkInstance = new ZKLib(ip, 4370, 3000, 3000);
+    const zkInstance = new ZKLib(ip, machinePort, 3000, 3000);
     try {
         await zkInstance.createSocket();
         await zkInstance.disconnect();
         lastMachineStatus = 'Online';
         lastMachineCheckTime = Date.now();
-        res.json({ status: 'Online' });
+        res.json({ status: 'Online', ip, port: machinePort });
     } catch (e) {
         lastMachineStatus = 'Offline';
         lastMachineCheckTime = Date.now();
-        res.json({ status: 'Offline' });
+        res.json({ status: 'Offline', ip, port: machinePort });
     } finally {
         isCheckingMachineStatus = false;
     }
