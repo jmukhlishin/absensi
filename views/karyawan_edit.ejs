@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Karyawan</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 20px; background-color: #f4f7f6; }
+        .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        h1 { color: #333; text-align: center; }
+        .nav { margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #ddd; }
+        .nav a { text-decoration: none; color: #007bff; font-weight: bold; }
+        
+        form { display: flex; flex-direction: column; gap: 15px; }
+        label { font-weight: bold; color: #555; }
+        input { padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; }
+        button { padding: 10px; background-color: #007bff; color: white; cursor: pointer; border: none; font-weight: bold; border-radius: 4px; font-size: 16px; }
+        button:hover { background-color: #0056b3; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="/karyawan">← Kembali ke Daftar Karyawan</a>
+        </div>
+        
+        <h1>Edit Karyawan</h1>
+        
+        <form action="/karyawan/edit/<%= k.id %>" method="POST">
+            <div>
+                <label>UID Mesin Absen</label>
+                <input type="number" name="uid" value="<%= k.uid %>" required>
+            </div>
+            <div>
+                <label>Nama Karyawan</label>
+                <input type="text" name="nama" value="<%= k.nama %>" required>
+            </div>
+            <button type="submit">Simpan Perubahan</button>
+        </form>
+    </div>
+</body>
+</html>
