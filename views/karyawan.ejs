@@ -12,6 +12,7 @@
             --primary-yellow: #ffc107;
             --light-yellow: #fff8e1;
             --text-dark: #1e293b;
+            --text-muted: #64748b;
             --white: #ffffff;
         }
         * { box-sizing: border-box; }
@@ -24,7 +25,7 @@
             color: var(--text-dark);
         }
         .container {
-            max-width: 900px;
+            max-width: 960px;
             margin: auto;
             background: var(--white);
             padding: 28px;
@@ -56,7 +57,7 @@
             text-align: left;
             border-left: 5px solid var(--primary-yellow);
             padding-left: 12px;
-            margin-bottom: 14px;
+            margin-bottom: 0;
         }
         .nav {
             margin-bottom: 24px;
@@ -65,6 +66,9 @@
             border-radius: 12px;
             display: flex;
             align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
         }
         .nav a {
             text-decoration: none;
@@ -77,31 +81,17 @@
         .nav a:hover {
             text-decoration: underline;
         }
-        
-        form {
+
+        .header-bar {
             display: flex;
+            justify-content: space-between;
+            align-items: center;
             flex-wrap: wrap;
             gap: 12px;
-            margin-bottom: 30px;
-            padding: 18px;
-            background-color: #f8fbff;
-            border: 1px solid #dbeafe;
-            border-radius: 12px;
+            margin-bottom: 16px;
         }
-        input {
-            padding: 10px 14px;
-            font-size: 15px;
-            border: 1px solid #cbd5e1;
-            border-radius: 8px;
-            flex: 1;
-            min-width: 200px;
-        }
-        input:focus {
-            outline: none;
-            border-color: var(--secondary-blue);
-            box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.15);
-        }
-        button {
+
+        .btn-open-modal {
             padding: 10px 20px;
             background-color: var(--primary-yellow);
             color: var(--primary-blue);
@@ -111,18 +101,27 @@
             border-radius: 8px;
             font-size: 15px;
             transition: all 0.2s ease;
+            box-shadow: 0 3px 8px rgba(13, 71, 161, 0.15);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
         }
-        button:hover {
+        .btn-open-modal:hover {
             background-color: #ffb300;
             transform: translateY(-1px);
         }
-        
+
+        .table-responsive {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            border-radius: 10px;
+            border: 1px solid #e2e8f0;
+        }
         table {
             width: 100%;
+            min-width: 520px;
             border-collapse: collapse;
-            margin-top: 10px;
-            border-radius: 10px;
-            overflow: hidden;
         }
         th, td {
             padding: 13px 16px;
@@ -133,9 +132,13 @@
             background: linear-gradient(90deg, var(--primary-blue), var(--secondary-blue));
             color: var(--primary-yellow);
             font-weight: 700;
+            white-space: nowrap;
         }
         tr:nth-child(even) { background-color: #f8fafc; }
         tr:hover { background-color: var(--light-yellow); }
+        .action-links {
+            white-space: nowrap;
+        }
         .action-links a {
             margin-right: 8px;
             text-decoration: none;
@@ -153,6 +156,161 @@
         .btn-edit:hover { background-color: #ffb300; }
         .btn-delete { background-color: #dc3545; }
         .btn-delete:hover { background-color: #b02a37; }
+
+        /* Modal Popup Tambah Karyawan */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(13, 71, 161, 0.7);
+            backdrop-filter: blur(4px);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            padding: 16px;
+        }
+        .modal-overlay.active {
+            display: flex;
+        }
+        .modal-card {
+            background: var(--white);
+            width: 100%;
+            max-width: 460px;
+            border-radius: 16px;
+            padding: 28px;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+            border-top: 6px solid var(--primary-yellow);
+            position: relative;
+            animation: modalFadeIn 0.2s ease-out;
+        }
+        @keyframes modalFadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 12px;
+        }
+        .modal-header h3 {
+            margin: 0;
+            font-size: 20px;
+            color: var(--primary-blue);
+        }
+        .btn-close-x {
+            background: none;
+            border: none;
+            font-size: 24px;
+            line-height: 1;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 0 4px;
+        }
+        .btn-close-x:hover {
+            color: var(--primary-blue);
+        }
+        .modal-form {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .form-group label {
+            font-weight: 700;
+            font-size: 14px;
+            color: var(--primary-blue);
+        }
+        .form-group input {
+            padding: 11px 14px;
+            font-size: 15px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            width: 100%;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--secondary-blue);
+            box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.15);
+        }
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 8px;
+        }
+        .btn-cancel {
+            padding: 10px 18px;
+            background-color: #e2e8f0;
+            color: var(--text-dark);
+            border: none;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .btn-cancel:hover {
+            background-color: #cbd5e1;
+        }
+        .btn-submit {
+            padding: 10px 20px;
+            background-color: var(--primary-yellow);
+            color: var(--primary-blue);
+            border: none;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .btn-submit:hover {
+            background-color: #ffb300;
+        }
+
+        /* Media Queries untuk Mobile & Tablet */
+        @media (max-width: 768px) {
+            body {
+                padding: 12px;
+            }
+            .container {
+                padding: 18px 14px;
+                border-radius: 12px;
+            }
+            h1 {
+                font-size: 22px;
+                margin-bottom: 18px;
+            }
+            .header-bar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .btn-open-modal {
+                width: 100%;
+                justify-content: center;
+            }
+            th, td {
+                padding: 10px 12px;
+                font-size: 13px;
+            }
+            .modal-card {
+                padding: 20px 16px;
+            }
+            .modal-actions {
+                flex-direction: column-reverse;
+            }
+            .btn-cancel, .btn-submit {
+                width: 100%;
+                padding: 12px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -163,41 +321,92 @@
         
         <h1>Manajemen Karyawan</h1>
         
-        <h2>Tambah Karyawan Baru</h2>
-        <form action="/karyawan/add" method="POST">
-            <input type="text" name="uid" placeholder="UID/PIN Mesin Absen" required>
-            <input type="text" name="nama" placeholder="Nama Karyawan" required>
-            <button type="submit">+ Tambah</button>
-        </form>
+        <div class="header-bar">
+            <h2>Daftar Karyawan</h2>
+            <button type="button" class="btn-open-modal" onclick="openAddModal()">+ Tambah Karyawan</button>
+        </div>
 
-        <h2>Daftar Karyawan</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>UID Mesin</th>
-                    <th>Nama</th>
-                    <th>Aksi</th>
-                </tr>
-            </thead>
-            <tbody>
-                <% if (karyawan.length > 0) { %>
-                    <% karyawan.forEach(k => { %>
-                        <tr>
-                            <td><%= k.uid %></td>
-                            <td><strong><%= k.nama %></strong></td>
-                            <td class="action-links">
-                                <a href="/karyawan/edit/<%= k.uid %>" class="btn-edit">Edit</a>
-                                <a href="/karyawan/delete/<%= k.uid %>" class="btn-delete" onclick="return confirm('Yakin ingin menghapus karyawan ini?')">Hapus</a>
-                            </td>
-                        </tr>
-                    <% }) %>
-                <% } else { %>
+        <div class="table-responsive">
+            <table>
+                <thead>
                     <tr>
-                        <td colspan="3" style="text-align: center;">Belum ada data karyawan.</td>
+                        <th>ID</th>
+                        <th>Nama</th>
+                        <th>Jabatan/Bagian</th>
+                        <th>Aksi</th>
                     </tr>
-                <% } %>
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    <% if (karyawan.length > 0) { %>
+                        <% karyawan.forEach(k => { %>
+                            <tr>
+                                <td><%= k.uid %></td>
+                                <td><strong><%= k.nama %></strong></td>
+                                <td><%= k.jabatan || '-' %></td>
+                                <td class="action-links">
+                                    <a href="/karyawan/edit/<%= k.uid %>" class="btn-edit">Edit</a>
+                                    <a href="/karyawan/delete/<%= k.uid %>" class="btn-delete" onclick="return confirm('Yakin ingin menghapus karyawan ini?')">Hapus</a>
+                                </td>
+                            </tr>
+                        <% }) %>
+                    <% } else { %>
+                        <tr>
+                            <td colspan="4" style="text-align: center;">Belum ada data karyawan.</td>
+                        </tr>
+                    <% } %>
+                </tbody>
+            </table>
+        </div>
     </div>
+
+    <!-- Modal Popup Tambah Karyawan -->
+    <div id="add-karyawan-modal" class="modal-overlay" onclick="handleOverlayClick(event)">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Tambah Karyawan Baru</h3>
+                <button type="button" class="btn-close-x" onclick="closeAddModal()" title="Tutup">&times;</button>
+            </div>
+            <form class="modal-form" action="/karyawan/add" method="POST">
+                <div class="form-group">
+                    <label for="input-nama">Nama Karyawan</label>
+                    <input type="text" id="input-nama" name="nama" placeholder="Masukkan nama karyawan" required>
+                </div>
+                <div class="form-group">
+                    <label for="input-jabatan">Jabatan / Bagian</label>
+                    <input type="text" id="input-jabatan" name="jabatan" placeholder="Masukkan jabatan atau bagian" required>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-cancel" onclick="closeAddModal()">Batal</button>
+                    <button type="submit" class="btn-submit">Simpan Karyawan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function openAddModal() {
+            const modal = document.getElementById('add-karyawan-modal');
+            modal.classList.add('active');
+            const namaInput = document.getElementById('input-nama');
+            if (namaInput) setTimeout(() => namaInput.focus(), 50);
+        }
+
+        function closeAddModal() {
+            const modal = document.getElementById('add-karyawan-modal');
+            modal.classList.remove('active');
+        }
+
+        function handleOverlayClick(e) {
+            if (e.target.id === 'add-karyawan-modal') {
+                closeAddModal();
+            }
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeAddModal();
+            }
+        });
+    </script>
 </body>
 </html>
