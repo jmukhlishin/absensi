@@ -112,28 +112,149 @@ function updateSyncState(patch) {
     Object.assign(syncState, patch, { updatedAt: Date.now() });
 }
 
-// Query daftar absensi dengan status Masuk/Pulang
-const ABSENSI_LIST_QUERY = `
-    SELECT a.id, a.uid, k.nama, a.waktu, 
-    CASE 
-        WHEN a.status = 'Mesin' THEN 
+// Helper CTE untuk memfilter log absensi harian sesuai aturan:
+// 1. Absen pertama pada hari tersebut = JAM MASUK
+// 2. Absen < 1 jam (3600 detik) sejak jam masuk = DIABAIKAN
+// 3. Absen >= 1 jam sejak jam masuk = JAM PULANG (jika berkali-kali setelah 1 jam, ambil log terakhir sebagai jam pulang)
+const FILTERED_ABSENSI_CTE = `
+    WITH DailyStats AS (
+        SELECT 
+            id,
+            uid,
+            waktu,
+            status,
+            MIN(waktu) OVER (PARTITION BY uid, date(waktu)) as first_waktu,
+            ROW_NUMBER() OVER (PARTITION BY uid, date(waktu) ORDER BY waktu ASC, id ASC) as rn_asc,
+            ROW_NUMBER() OVER (PARTITION BY uid, date(waktu) ORDER BY waktu DESC, id DESC) as rn_desc
+        FROM absensi
+    ),
+    ValidAbsensi AS (
+        SELECT 
+            id,
+            uid,
+            waktu,
             CASE 
-                WHEN (
-                    SELECT COUNT(*) 
-                    FROM absensi a2 
-                    WHERE a2.uid = a.uid 
-                      AND date(a2.waktu) = date(a.waktu) 
-                      AND (a2.waktu < a.waktu OR (a2.waktu = a.waktu AND a2.id <= a.id))
-                ) % 2 = 1 THEN 'Masuk' 
-                ELSE 'Pulang' 
-            END
-        ELSE a.status 
-    END as status
-    FROM absensi a 
-    LEFT JOIN karyawan k ON a.uid = k.uid 
-    ORDER BY a.waktu DESC, a.id DESC 
-    LIMIT ? OFFSET ?
+                WHEN rn_asc = 1 THEN 'Masuk'
+                ELSE 'Pulang'
+            END as status
+        FROM DailyStats
+        WHERE rn_asc = 1 
+           OR (
+               rn_desc = 1 
+               AND (strftime('%s', waktu) - strftime('%s', first_waktu)) >= 3600
+           )
+    )
 `;
+
+function buildAbsensiQuery(search) {
+    const searchTerm = (search || '').trim();
+    const hasSearch = searchTerm.length > 0;
+    const whereClause = hasSearch ? `WHERE COALESCE(k.nama, 'User ' || a.uid) LIKE ?` : ``;
+    const searchParam = hasSearch ? [`%${searchTerm}%`] : [];
+
+    const listSql = `
+        ${FILTERED_ABSENSI_CTE}
+        SELECT a.id, a.uid, k.nama, a.waktu, a.status
+        FROM ValidAbsensi a
+        LEFT JOIN karyawan k ON a.uid = k.uid
+        ${whereClause}
+        ORDER BY a.waktu DESC, a.id DESC
+        LIMIT ? OFFSET ?
+    `;
+
+    const countSql = `
+        ${FILTERED_ABSENSI_CTE}
+        SELECT COUNT(*) as total
+        FROM ValidAbsensi a
+        LEFT JOIN karyawan k ON a.uid = k.uid
+        ${whereClause}
+    `;
+
+    return { listSql, countSql, searchParam, searchTerm };
+}
+
+// Simpan / Proses Log Absensi Sesuai Aturan Jam Masuk & Jam Pulang (>= 1 Jam)
+async function saveAttendanceLog(uid, waktu, rawStatus = 'Mesin') {
+    const dateStr = waktu.slice(0, 10);
+    const dayLogs = await dbAll(
+        `SELECT id, waktu, status FROM absensi WHERE uid = ? AND date(waktu) = ? ORDER BY waktu ASC, id ASC`,
+        [uid, dateStr]
+    );
+
+    if (dayLogs.length === 0) {
+        // Belum pernah absen hari ini -> catat sebagai JAM MASUK
+        const res = await dbRun(
+            `INSERT INTO absensi (uid, waktu, status) VALUES (?, ?, 'Masuk')`,
+            [uid, waktu]
+        );
+        return { action: 'inserted_in', changes: res && res.changes ? res.changes : 1 };
+    }
+
+    const firstLog = dayLogs[0];
+    const firstMoment = moment(firstLog.waktu, 'YYYY-MM-DD HH:mm:ss');
+    const currentMoment = moment(waktu, 'YYYY-MM-DD HH:mm:ss');
+
+    // Jika ada log yang lebih awal dari firstLog yang sudah tercatat
+    if (currentMoment.isBefore(firstMoment)) {
+        await dbRun(`INSERT INTO absensi (uid, waktu, status) VALUES (?, ?, 'Masuk')`, [uid, waktu]);
+        const refreshed = await dbAll(
+            `SELECT id, waktu FROM absensi WHERE uid = ? AND date(waktu) = ? ORDER BY waktu ASC, id ASC`,
+            [uid, dateStr]
+        );
+        const newFirst = moment(refreshed[0].waktu, 'YYYY-MM-DD HH:mm:ss');
+        let validOutId = null;
+        for (let i = 1; i < refreshed.length; i++) {
+            const diffSec = moment(refreshed[i].waktu, 'YYYY-MM-DD HH:mm:ss').diff(newFirst, 'seconds');
+            if (diffSec >= 3600) {
+                validOutId = refreshed[i].id;
+            }
+        }
+        for (let i = 1; i < refreshed.length; i++) {
+            if (refreshed[i].id === validOutId) {
+                await dbRun(`UPDATE absensi SET status = 'Pulang' WHERE id = ?`, [refreshed[i].id]);
+            } else {
+                await dbRun(`DELETE FROM absensi WHERE id = ?`, [refreshed[i].id]);
+            }
+        }
+        return { action: 'reordered', changes: 1 };
+    }
+
+    const diffSeconds = currentMoment.diff(firstMoment, 'seconds');
+
+    // Kurang dari 1 jam (3600 detik) sejak jam masuk -> DIABAIKAN
+    if (diffSeconds < 3600) {
+        return { action: 'ignored', changes: 0 };
+    }
+
+    // Sudah lewat >= 1 jam sejak jam masuk -> dicatat / diperbarui sebagai JAM PULANG
+    if (dayLogs.length === 1) {
+        const res = await dbRun(
+            `INSERT INTO absensi (uid, waktu, status) VALUES (?, ?, 'Pulang')`,
+            [uid, waktu]
+        );
+        return { action: 'inserted_out', changes: res && res.changes ? res.changes : 1 };
+    } else {
+        const lastLog = dayLogs[dayLogs.length - 1];
+        const lastMoment = moment(lastLog.waktu, 'YYYY-MM-DD HH:mm:ss');
+
+        // Bersihkan log ekstra di tengah jika ada
+        if (dayLogs.length > 2) {
+            const extraIds = dayLogs.slice(1, -1).map(r => r.id);
+            for (const eid of extraIds) {
+                await dbRun(`DELETE FROM absensi WHERE id = ?`, [eid]);
+            }
+        }
+
+        if (currentMoment.isAfter(lastMoment)) {
+            const res = await dbRun(
+                `UPDATE absensi SET waktu = ?, status = 'Pulang' WHERE id = ?`,
+                [waktu, lastLog.id]
+            );
+            return { action: 'updated_out', changes: res && res.changes ? res.changes : 1 };
+        }
+        return { action: 'ignored_older_out', changes: 0 };
+    }
+}
 
 // Dashboard Route - Langsung tampilkan data absensi yang sudah tersimpan di database
 app.get('/', async (req, res) => {
@@ -141,10 +262,13 @@ app.get('/', async (req, res) => {
         const page = Math.max(1, parseInt(req.query.page) || 1);
         const limit = 50;
         const offset = (page - 1) * limit;
+        const search = req.query.search || '';
+
+        const { listSql, countSql, searchParam, searchTerm } = buildAbsensiQuery(search);
 
         const [absensiData, totalRow, karyawanRow] = await Promise.all([
-            dbAll(ABSENSI_LIST_QUERY, [limit, offset]),
-            dbGet('SELECT COUNT(*) as total FROM absensi'),
+            dbAll(listSql, [...searchParam, limit, offset]),
+            dbGet(countSql, searchParam),
             dbGet('SELECT COUNT(*) as total FROM karyawan')
         ]);
 
@@ -158,7 +282,8 @@ app.get('/', async (req, res) => {
             totalAbsensi: totalAbsensi,
             admin: 'Julio (Admin)',
             currentPage: page,
-            totalPages: totalPages
+            totalPages: totalPages,
+            searchQuery: searchTerm
         });
     } catch (err) {
         console.error('Error rendering dashboard:', err);
@@ -172,8 +297,10 @@ app.get('/api/latest-absensi', async (req, res) => {
         const page = Math.max(1, parseInt(req.query.page) || 1);
         const limit = 50;
         const offset = (page - 1) * limit;
+        const search = req.query.search || '';
 
-        const rows = await dbAll(ABSENSI_LIST_QUERY, [limit, offset]);
+        const { listSql, searchParam } = buildAbsensiQuery(search);
+        const rows = await dbAll(listSql, [...searchParam, limit, offset]);
         res.json(rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -186,10 +313,13 @@ app.get('/api/dashboard-summary', async (req, res) => {
         const page = Math.max(1, parseInt(req.query.page) || 1);
         const limit = 50;
         const offset = (page - 1) * limit;
+        const search = req.query.search || '';
+
+        const { listSql, countSql, searchParam, searchTerm } = buildAbsensiQuery(search);
 
         const [rows, totalRow, karyawanRow, lastLogRow] = await Promise.all([
-            dbAll(ABSENSI_LIST_QUERY, [limit, offset]),
-            dbGet('SELECT COUNT(*) as total FROM absensi'),
+            dbAll(listSql, [...searchParam, limit, offset]),
+            dbGet(countSql, searchParam),
             dbGet('SELECT COUNT(*) as total FROM karyawan'),
             dbGet('SELECT MAX(waktu) as lastWaktu FROM absensi')
         ]);
@@ -204,6 +334,7 @@ app.get('/api/dashboard-summary', async (req, res) => {
             totalKaryawan,
             currentPage: page,
             totalPages,
+            searchQuery: searchTerm,
             lastWaktu: lastLogRow ? lastLogRow.lastWaktu : null
         });
     } catch (err) {
@@ -217,12 +348,16 @@ app.get('/api/sync-status', (req, res) => {
 });
 
 // Manual Absensi
-app.post('/absen', (req, res) => {
-    const { uid, status } = req.body;
-    const waktu = moment().format('YYYY-MM-DD HH:mm:ss');
-    db.run(`INSERT INTO absensi (uid, waktu, status) VALUES (?, ?, ?)`, [uid, waktu, status], () => {
+app.post('/absen', async (req, res) => {
+    try {
+        const { uid, status } = req.body;
+        const waktu = moment().format('YYYY-MM-DD HH:mm:ss');
+        await saveAttendanceLog(uid, waktu, status || 'Manual');
         res.redirect('/');
-    });
+    } catch (err) {
+        console.error('Gagal menyimpan absensi manual:', err);
+        res.redirect('/');
+    }
 });
 
 // CRUD Karyawan - List
@@ -289,8 +424,14 @@ app.get('/print', (req, res) => {
     const end = req.query.end;
 
     let query = `
-        SELECT a.uid, COALESCE(k.nama, 'User ' || a.uid) as nama, date(a.waktu) as tanggal, MIN(time(a.waktu)) as check_in, MAX(time(a.waktu)) as check_out
-        FROM absensi a
+        ${FILTERED_ABSENSI_CTE}
+        SELECT 
+            a.uid, 
+            COALESCE(k.nama, 'User ' || a.uid) as nama, 
+            date(a.waktu) as tanggal, 
+            MIN(CASE WHEN a.status = 'Masuk' THEN time(a.waktu) END) as check_in, 
+            MAX(CASE WHEN a.status = 'Pulang' THEN time(a.waktu) END) as check_out
+        FROM ValidAbsensi a
         LEFT JOIN karyawan k ON a.uid = k.uid
     `;
     const params = [];
@@ -471,7 +612,7 @@ async function runSyncAbsensi(ip) {
 
         // 2. Filter hanya log baru setelah data terakhir di database (Incremental)
         const seenKeys = new Set();
-        const newLogs = [];
+        const candidateLogs = [];
 
         for (const log of allLogs) {
             if (!log || !log.recordTime) continue;
@@ -492,13 +633,13 @@ async function runSyncAbsensi(ip) {
             if (seenKeys.has(uniqueKey)) continue;
             seenKeys.add(uniqueKey);
 
-            newLogs.push({ uid, waktu, status: 'Mesin' });
+            candidateLogs.push({ uid, waktu, status: 'Mesin' });
         }
 
-        // Urutkan log baru secara kronologis agar urutan ID sesuai waktu
-        newLogs.sort((a, b) => a.waktu.localeCompare(b.waktu));
+        // Urutkan log baru secara kronologis agar evaluasi Jam Masuk & Jam Pulang (>= 1 jam) akurat
+        candidateLogs.sort((a, b) => a.waktu.localeCompare(b.waktu));
 
-        const totalNew = newLogs.length;
+        const totalNew = candidateLogs.length;
 
         if (totalNew === 0) {
             const msg = 'Data absensi sudah paling mutakhir (tidak ada data baru untuk didownload).';
@@ -518,23 +659,18 @@ async function runSyncAbsensi(ip) {
             progress: 50,
             total: totalNew,
             processed: 0,
-            message: `Menyimpan ${totalNew} data absensi baru...`
+            message: `Memproses ${totalNew} data absensi baru...`
         });
 
-        // 3. Simpan log baru secara bertahap (chunking + yieldEventLoop) agar server tidak blocking
+        // 3. Simpan log baru secara bertahap sesuai aturan Jam Masuk & Pulang (>= 1 jam)
         let insertedCount = 0;
         const chunkSize = 50;
 
         for (let i = 0; i < totalNew; i += chunkSize) {
-            const chunk = newLogs.slice(i, i + chunkSize);
+            const chunk = candidateLogs.slice(i, i + chunkSize);
 
             for (const item of chunk) {
-                const result = await dbRun(
-                    `INSERT INTO absensi (uid, waktu, status)
-                     SELECT ?, ?, ?
-                     WHERE NOT EXISTS (SELECT 1 FROM absensi WHERE uid = ? AND waktu = ?)`,
-                    [item.uid, item.waktu, item.status, item.uid, item.waktu]
-                );
+                const result = await saveAttendanceLog(item.uid, item.waktu, item.status);
                 if (result && result.changes > 0) {
                     insertedCount++;
                 }
@@ -546,13 +682,13 @@ async function runSyncAbsensi(ip) {
                 progress: pct,
                 processed: processed,
                 added: insertedCount,
-                message: `Menyimpan data absensi baru (${processed}/${totalNew})...`
+                message: `Memproses data absensi baru (${processed}/${totalNew})...`
             });
 
             await yieldEventLoop();
         }
 
-        const msg = `Data absensi berhasil didownload (${insertedCount} data baru ditambahkan)!`;
+        const msg = `Data absensi berhasil didownload (${insertedCount} log masuk/pulang disimpan)!`;
         updateSyncState({
             isSyncing: false,
             status: 'completed',
