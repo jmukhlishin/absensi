@@ -1,0 +1,1123 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Struktur Perusahaan</title>
+    <style>
+        :root {
+            --primary-blue: #0d47a1;
+            --secondary-blue: #1976d2;
+            --light-blue: #e3f2fd;
+            --primary-yellow: #ffc107;
+            --dark-yellow: #ff8f00;
+            --light-yellow: #fff8e1;
+            --text-dark: #1e293b;
+            --text-muted: #64748b;
+            --white: #ffffff;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 24px;
+            background: linear-gradient(135deg, #e3f2fd 0%, #fff8e1 100%);
+            min-height: 100vh;
+            color: var(--text-dark);
+        }
+        .container {
+            max-width: 1280px;
+            margin: auto;
+            background: var(--white);
+            padding: 28px;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(13, 71, 161, 0.1);
+            border-top: 6px solid var(--primary-yellow);
+        }
+        h1, h2 {
+            color: var(--primary-blue);
+            margin-top: 0;
+            font-weight: 700;
+        }
+        h1 {
+            font-size: 26px;
+            margin-bottom: 24px;
+            text-align: center;
+        }
+        h1::after {
+            content: '';
+            display: block;
+            width: 70px;
+            height: 4px;
+            background: var(--primary-yellow);
+            margin: 8px auto 0;
+            border-radius: 2px;
+        }
+        h2 {
+            font-size: 18px;
+            text-align: left;
+            border-left: 5px solid var(--primary-yellow);
+            padding-left: 12px;
+            margin-bottom: 0;
+        }
+        .nav {
+            margin-bottom: 24px;
+            padding: 14px 18px;
+            background: linear-gradient(90deg, var(--primary-blue), var(--secondary-blue));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+            box-shadow: 0 4px 12px rgba(13, 71, 161, 0.18);
+        }
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .nav a {
+            text-decoration: none;
+            color: var(--primary-blue);
+            background: var(--primary-yellow);
+            font-weight: 700;
+            font-size: 14px;
+            padding: 9px 16px;
+            border-radius: 8px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+        }
+        .nav a:hover {
+            background: #ffd54f;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        }
+        .nav a.nav-secondary {
+            background: rgba(255, 255, 255, 0.15);
+            color: var(--white);
+        }
+        .nav a.nav-secondary:hover {
+            background: var(--primary-yellow);
+            color: var(--primary-blue);
+        }
+
+        /* Alert Banner */
+        .alert-banner {
+            padding: 12px 16px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-weight: 600;
+            font-size: 14px;
+            display: none;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .alert-banner.show {
+            display: flex;
+        }
+        .alert-success {
+            background: #dcfce7;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+        }
+        .alert-error {
+            background: #fef2f2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+        }
+        .alert-close {
+            background: none;
+            border: none;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            color: inherit;
+        }
+
+        /* Split Panel Layout */
+        .split-layout {
+            display: grid;
+            grid-template-columns: 440px 1fr;
+            gap: 24px;
+            align-items: start;
+        }
+
+        .left-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .panel-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+
+        .btn-add {
+            padding: 8px 14px;
+            background-color: var(--primary-yellow);
+            color: var(--primary-blue);
+            cursor: pointer;
+            border: none;
+            font-weight: 700;
+            border-radius: 8px;
+            font-size: 13.5px;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 6px rgba(13, 71, 161, 0.12);
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .btn-add:hover {
+            background-color: #ffb300;
+            transform: translateY(-1px);
+        }
+
+        .btn-save-structure {
+            padding: 10px 20px;
+            background: linear-gradient(90deg, var(--primary-blue), var(--secondary-blue));
+            color: var(--primary-yellow);
+            cursor: pointer;
+            border: 2px solid var(--primary-yellow);
+            font-weight: 700;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.2s ease;
+            box-shadow: 0 3px 10px rgba(13, 71, 161, 0.2);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn-save-structure:hover {
+            background: var(--primary-yellow);
+            color: var(--primary-blue);
+            transform: translateY(-1px);
+        }
+
+        .table-responsive {
+            width: 100%;
+            max-height: 290px;
+            overflow-y: auto;
+            overflow-x: auto;
+            border-radius: 10px;
+            border: 1px solid #e2e8f0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 11px 14px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 14px;
+        }
+        thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: linear-gradient(90deg, var(--primary-blue), var(--secondary-blue));
+        }
+        th {
+            color: var(--primary-yellow);
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        tbody tr {
+            background-color: #ffffff;
+            transition: all 0.15s ease;
+        }
+        tbody tr:nth-child(even) {
+            background-color: #f8fafc;
+        }
+        tbody tr.draggable-row {
+            cursor: grab;
+        }
+        tbody tr.draggable-row:hover {
+            background-color: var(--light-yellow);
+        }
+        tbody tr.draggable-row:active {
+            cursor: grabbing;
+        }
+        tbody tr.dragging {
+            opacity: 0.5;
+            background-color: var(--light-blue);
+        }
+
+        .drag-handle {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .drag-icon {
+            color: var(--text-muted);
+            font-size: 16px;
+            line-height: 1;
+            user-select: none;
+        }
+        .badge-type {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+        .badge-company {
+            background: var(--light-blue);
+            color: var(--primary-blue);
+            border: 1px solid #90caf9;
+        }
+        .badge-division {
+            background: var(--light-yellow);
+            color: #b45309;
+            border: 1px solid #ffe082;
+        }
+
+        .btn-del-small {
+            background: #fee2e2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.15s ease;
+        }
+        .btn-del-small:hover {
+            background: #dc2626;
+            color: #ffffff;
+        }
+
+        .helper-hint {
+            font-size: 12.5px;
+            color: var(--text-muted);
+            margin: 0 0 10px 0;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* Right Panel: Tree Structure */
+        .right-panel {
+            min-height: 620px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .structure-dropzone {
+            flex: 1;
+            min-height: 520px;
+            background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+            border: 2px dashed #94a3b8;
+            border-radius: 12px;
+            padding: 20px;
+            transition: all 0.2s ease;
+            overflow-y: auto;
+        }
+        .structure-dropzone.drag-over-canvas {
+            background: #e3f2fd;
+            border-color: var(--primary-blue);
+            box-shadow: inset 0 0 0 2px rgba(13, 71, 161, 0.15);
+        }
+
+        .empty-tree-placeholder {
+            text-align: center;
+            padding: 80px 20px;
+            color: var(--text-muted);
+        }
+        .empty-tree-placeholder svg {
+            width: 56px;
+            height: 56px;
+            color: #94a3b8;
+            margin-bottom: 12px;
+        }
+        .empty-tree-placeholder h3 {
+            margin: 0 0 8px 0;
+            color: var(--primary-blue);
+            font-size: 18px;
+        }
+        .empty-tree-placeholder p {
+            margin: 0;
+            font-size: 14px;
+        }
+
+        /* Hierarchy / Tree Styling */
+        .tree-root-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .tree-company-item {
+            background: #ffffff;
+            border: 1.5px solid #cbd5e1;
+            border-left: 6px solid var(--primary-blue);
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 4px 12px rgba(13, 71, 161, 0.06);
+            transition: all 0.2s ease;
+        }
+        .tree-company-item.drag-over-target {
+            border-color: var(--primary-yellow);
+            background: #fffdf5;
+            box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.35);
+        }
+
+        .tree-node-card {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .tree-node-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 700;
+        }
+        .company-title {
+            font-size: 16px;
+            color: var(--primary-blue);
+        }
+        .division-title {
+            font-size: 14.5px;
+            color: var(--text-dark);
+        }
+
+        .btn-remove-node {
+            background: #fef2f2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+            border-radius: 6px;
+            width: 28px;
+            height: 28px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 16px;
+            line-height: 1;
+            transition: all 0.15s ease;
+        }
+        .btn-remove-node:hover {
+            background: #dc2626;
+            color: #ffffff;
+        }
+
+        /* Nested Tree Children (Berjenjang / Bertingkat) */
+        .tree-children {
+            list-style: none;
+            margin: 12px 0 0 22px;
+            padding: 0 0 0 18px;
+            border-left: 2px solid #90caf9;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .tree-division-item {
+            position: relative;
+            background: #f8fafc;
+            border: 1.5px solid #e2e8f0;
+            border-left: 5px solid var(--primary-yellow);
+            border-radius: 10px;
+            padding: 11px 14px;
+            transition: all 0.2s ease;
+            cursor: grab;
+        }
+        .tree-division-item::before {
+            content: '';
+            position: absolute;
+            left: -20px;
+            top: 20px;
+            width: 18px;
+            height: 2px;
+            background: #90caf9;
+        }
+        .tree-division-item.drag-over-target {
+            border-color: var(--primary-blue);
+            background: var(--light-blue);
+            box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.25);
+        }
+
+        .drop-sub-hint {
+            font-size: 11.5px;
+            color: var(--text-muted);
+            font-weight: 500;
+            margin-top: 6px;
+            padding-top: 6px;
+            border-top: 1px dashed #e2e8f0;
+        }
+
+        /* Modal Popup */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(13, 71, 161, 0.7);
+            backdrop-filter: blur(4px);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            padding: 16px;
+        }
+        .modal-overlay.active {
+            display: flex;
+        }
+        .modal-card {
+            background: var(--white);
+            width: 100%;
+            max-width: 440px;
+            border-radius: 16px;
+            padding: 28px;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+            border-top: 6px solid var(--primary-yellow);
+            position: relative;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 12px;
+        }
+        .modal-header span.modal-title {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--primary-blue);
+        }
+        .btn-close-x {
+            background: none;
+            border: none;
+            font-size: 24px;
+            line-height: 1;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 0 4px;
+        }
+        .btn-close-x:hover {
+            color: var(--primary-blue);
+        }
+        .modal-form {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .form-group label {
+            font-weight: 700;
+            font-size: 14px;
+            color: var(--primary-blue);
+        }
+        .form-group input {
+            padding: 11px 14px;
+            font-size: 15px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            width: 100%;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--secondary-blue);
+            box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.15);
+        }
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 8px;
+        }
+        .btn-cancel {
+            padding: 10px 18px;
+            background-color: #e2e8f0;
+            color: var(--text-dark);
+            border: none;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .btn-cancel:hover {
+            background-color: #cbd5e1;
+        }
+        .btn-submit {
+            padding: 10px 20px;
+            background-color: var(--primary-yellow);
+            color: var(--primary-blue);
+            border: none;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .btn-submit:hover {
+            background-color: #ffb300;
+        }
+
+        @media (max-width: 960px) {
+            .split-layout {
+                grid-template-columns: 1fr;
+            }
+            .right-panel {
+                min-height: 420px;
+            }
+        }
+        @media (max-width: 768px) {
+            body { padding: 12px; }
+            .container { padding: 18px 14px; }
+            .panel-header {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .btn-add, .btn-save-structure {
+                justify-content: center;
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <div class="nav-links">
+                <a href="/">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="19" y1="12" x2="5" y2="12"></line>
+                        <polyline points="12 19 5 12 12 5"></polyline>
+                    </svg>
+                    Kembali ke Dashboard
+                </a>
+                <a href="/karyawan" class="nav-secondary">Kelola Karyawan</a>
+            </div>
+        </div>
+
+        <div id="alert-box" class="alert-banner <%= (typeof msg !== 'undefined' && msg) ? 'show ' + (msgType === 'error' ? 'alert-error' : 'alert-success') : '' %>">
+            <span id="alert-text"><%= typeof msg !== 'undefined' ? msg : '' %></span>
+            <button type="button" class="alert-close" onclick="hideAlert()">&times;</button>
+        </div>
+
+        <h1>Struktur Perusahaan</h1>
+
+        <div class="split-layout">
+            <!-- PANEL KIRI: Tabel Perusahaan & Tabel Divisi -->
+            <div class="left-panel">
+                <!-- Tabel Perusahaan -->
+                <div class="panel-card">
+                    <div class="panel-header">
+                        <h2>Daftar Perusahaan</h2>
+                        <button type="button" class="btn-add" onclick="openModal('modal-perusahaan')">+ Tambah Perusahaan</button>
+                    </div>
+                    <p class="helper-hint">
+                        <span>&#9776; Tarik (Drag &amp; Drop) baris perusahaan ke panel kanan</span>
+                    </p>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th style="width: 55px;">No</th>
+                                    <th>Nama Perusahaan</th>
+                                    <th style="width: 80px; text-align: center;">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% if (perusahaanList && perusahaanList.length > 0) { %>
+                                    <% perusahaanList.forEach((p, idx) => { %>
+                                        <tr class="draggable-row" draggable="true"
+                                            ondragstart="onDragStartItem(event, 'perusahaan', '<%= p.id %>', <%- JSON.stringify(p.nama) %>)"
+                                            ondragend="onDragEndItem(event)">
+                                            <td><%= idx + 1 %></td>
+                                            <td>
+                                                <div class="drag-handle">
+                                                    <span class="drag-icon">&#9776;</span>
+                                                    <strong><%= p.nama %></strong>
+                                                </div>
+                                            </td>
+                                            <td style="text-align: center;">
+                                                <a href="/struktur-perusahaan/perusahaan/delete/<%= p.id %>" class="btn-del-small" onclick="return confirm('Hapus perusahaan ini?')">Hapus</a>
+                                            </td>
+                                        </tr>
+                                    <% }) %>
+                                <% } else { %>
+                                    <tr>
+                                        <td colspan="3" style="text-align: center; color: var(--text-muted);">Belum ada data perusahaan.</td>
+                                    </tr>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Tabel Divisi -->
+                <div class="panel-card">
+                    <div class="panel-header">
+                        <h2>Daftar Divisi</h2>
+                        <button type="button" class="btn-add" onclick="openModal('modal-divisi')">+ Tambah Divisi</button>
+                    </div>
+                    <p class="helper-hint">
+                        <span>&#9776; Tarik (Drag &amp; Drop) divisi ke bawah perusahaan / divisi di kanan</span>
+                    </p>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th style="width: 55px;">No</th>
+                                    <th>Nama Divisi</th>
+                                    <th style="width: 80px; text-align: center;">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% if (divisiList && divisiList.length > 0) { %>
+                                    <% divisiList.forEach((d, idx) => { %>
+                                        <tr class="draggable-row" draggable="true"
+                                            ondragstart="onDragStartItem(event, 'divisi', '<%= d.id %>', <%- JSON.stringify(d.nama) %>)"
+                                            ondragend="onDragEndItem(event)">
+                                            <td><%= idx + 1 %></td>
+                                            <td>
+                                                <div class="drag-handle">
+                                                    <span class="drag-icon">&#9776;</span>
+                                                    <strong><%= d.nama %></strong>
+                                                </div>
+                                            </td>
+                                            <td style="text-align: center;">
+                                                <a href="/struktur-perusahaan/divisi/delete/<%= d.id %>" class="btn-del-small" onclick="return confirm('Hapus divisi ini?')">Hapus</a>
+                                            </td>
+                                        </tr>
+                                    <% }) %>
+                                <% } else { %>
+                                    <tr>
+                                        <td colspan="3" style="text-align: center; color: var(--text-muted);">Belum ada data divisi.</td>
+                                    </tr>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PANEL KANAN: Hierarki / Tree Struktur Perusahaan -->
+            <div class="panel-card right-panel">
+                <div class="panel-header">
+                    <h2>Struktur Perusahaan (Hierarki)</h2>
+                    <button type="button" class="btn-save-structure" id="btn-save-structure" onclick="saveStructure()">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                            <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                            <polyline points="7 3 7 8 15 8"></polyline>
+                        </svg>
+                        Simpan Struktur
+                    </button>
+                </div>
+                <p class="helper-hint">
+                    <span>Drag &amp; Drop <strong>Perusahaan</strong> ke area di bawah, lalu Drag &amp; Drop <strong>Divisi</strong> ke dalam Perusahaan atau ke atas Divisi lain untuk membuat tingkatan (sub-divisi). Klik <strong>Simpan Struktur</strong> untuk menyimpan.</span>
+                </p>
+
+                <div id="structure-canvas" class="structure-dropzone"
+                     ondragover="onCanvasDragOver(event)"
+                     ondragleave="onCanvasDragLeave(event)"
+                     ondrop="onCanvasDrop(event)">
+                    <!-- Dirender secara dinamis oleh JavaScript -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Tambah Perusahaan -->
+    <div id="modal-perusahaan" class="modal-overlay" onclick="handleOverlayClick(event, 'modal-perusahaan')">
+        <div class="modal-card">
+            <div class="modal-header">
+                <span class="modal-title">Tambah Perusahaan</span>
+                <button type="button" class="btn-close-x" onclick="closeModal('modal-perusahaan')">&times;</button>
+            </div>
+            <form class="modal-form" action="/struktur-perusahaan/perusahaan/add" method="POST">
+                <div class="form-group">
+                    <label for="nama-perusahaan">Nama Perusahaan</label>
+                    <input type="text" id="nama-perusahaan" name="nama" placeholder="Masukkan nama perusahaan" required>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-cancel" onclick="closeModal('modal-perusahaan')">Batal</button>
+                    <button type="submit" class="btn-submit">Simpan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Tambah Divisi -->
+    <div id="modal-divisi" class="modal-overlay" onclick="handleOverlayClick(event, 'modal-divisi')">
+        <div class="modal-card">
+            <div class="modal-header">
+                <span class="modal-title">Tambah Divisi</span>
+                <button type="button" class="btn-close-x" onclick="closeModal('modal-divisi')">&times;</button>
+            </div>
+            <form class="modal-form" action="/struktur-perusahaan/divisi/add" method="POST">
+                <div class="form-group">
+                    <label for="nama-divisi">Nama Divisi</label>
+                    <input type="text" id="nama-divisi" name="nama" placeholder="Masukkan nama divisi" required>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-cancel" onclick="closeModal('modal-divisi')">Batal</button>
+                    <button type="submit" class="btn-submit">Simpan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Data struktur awal dari database
+        let treeData = <%- JSON.stringify(strukturTree || []) %>;
+        let draggedPayload = null;
+
+        function genNodeId() {
+            return 'node_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
+        }
+
+        function escapeHtml(str) {
+            return String(str || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function showAlert(message, type = 'success') {
+            const box = document.getElementById('alert-box');
+            const txt = document.getElementById('alert-text');
+            if (!box || !txt) return;
+            box.className = 'alert-banner show ' + (type === 'error' ? 'alert-error' : 'alert-success');
+            txt.innerText = message;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function hideAlert() {
+            const box = document.getElementById('alert-box');
+            if (box) box.classList.remove('show');
+        }
+
+        function openModal(id) {
+            const modal = document.getElementById(id);
+            if (!modal) return;
+            modal.classList.add('active');
+            const input = modal.querySelector('input');
+            if (input) setTimeout(() => input.focus(), 50);
+        }
+
+        function closeModal(id) {
+            const modal = document.getElementById(id);
+            if (modal) modal.classList.remove('active');
+        }
+
+        function handleOverlayClick(e, id) {
+            if (e.target.id === id) closeModal(id);
+        }
+
+        // Drag & Drop Handlers dari Tabel Kiri maupun dari Tree Kanan
+        function onDragStartItem(event, tipe, refId, nama, existingNodeId = null) {
+            event.stopPropagation();
+            draggedPayload = {
+                tipe: tipe,
+                refId: Number(refId),
+                nama: nama,
+                existingNodeId: existingNodeId
+            };
+            event.dataTransfer.effectAllowed = 'copyMove';
+            event.dataTransfer.setData('text/plain', JSON.stringify(draggedPayload));
+            if (event.currentTarget && event.currentTarget.classList) {
+                event.currentTarget.classList.add('dragging');
+            }
+        }
+
+        function onDragEndItem(event) {
+            if (event.currentTarget && event.currentTarget.classList) {
+                event.currentTarget.classList.remove('dragging');
+            }
+            document.querySelectorAll('.drag-over-target, .drag-over-canvas').forEach(el => {
+                el.classList.remove('drag-over-target', 'drag-over-canvas');
+            });
+        }
+
+        // Dropzone Area Utama (Untuk Perusahaan)
+        function onCanvasDragOver(event) {
+            event.preventDefault();
+            if (draggedPayload && draggedPayload.tipe === 'perusahaan') {
+                event.currentTarget.classList.add('drag-over-canvas');
+                event.dataTransfer.dropEffect = 'copy';
+            }
+        }
+
+        function onCanvasDragLeave(event) {
+            if (event.target === event.currentTarget) {
+                event.currentTarget.classList.remove('drag-over-canvas');
+            }
+        }
+
+        function onCanvasDrop(event) {
+            event.preventDefault();
+            event.currentTarget.classList.remove('drag-over-canvas');
+
+            let payload = draggedPayload;
+            if (!payload) {
+                try {
+                    payload = JSON.parse(event.dataTransfer.getData('text/plain'));
+                } catch (e) {}
+            }
+            if (!payload) return;
+
+            if (payload.tipe === 'perusahaan') {
+                // Cek apakah perusahaan sudah ada di struktur root
+                const exists = treeData.some(c => Number(c.refId) === Number(payload.refId));
+                if (exists) {
+                    showAlert('Perusahaan "' + payload.nama + '" sudah ada di dalam struktur kanan.', 'error');
+                    return;
+                }
+                treeData.push({
+                    nodeId: genNodeId(),
+                    tipe: 'perusahaan',
+                    refId: Number(payload.refId),
+                    nama: payload.nama,
+                    children: []
+                });
+                renderStructure();
+            } else if (payload.tipe === 'divisi') {
+                if (treeData.length === 0) {
+                    showAlert('Silakan tarik Perusahaan terlebih dahulu ke panel kanan sebelum menambahkan Divisi.', 'error');
+                } else {
+                    showAlert('Arahkan dan lepaskan Divisi tepat di atas kotak Perusahaan atau Divisi induknya.', 'error');
+                }
+            }
+            draggedPayload = null;
+        }
+
+        // Dropzone pada Node (Perusahaan atau Divisi untuk menyusun hierarki/bertingkat)
+        function onNodeDragOver(event, targetNodeId) {
+            if (!draggedPayload || draggedPayload.tipe !== 'divisi') return;
+            event.preventDefault();
+            event.stopPropagation();
+            event.currentTarget.classList.add('drag-over-target');
+            event.dataTransfer.dropEffect = draggedPayload.existingNodeId ? 'move' : 'copy';
+        }
+
+        function onNodeDragLeave(event) {
+            event.stopPropagation();
+            event.currentTarget.classList.remove('drag-over-target');
+        }
+
+        function onNodeDrop(event, targetNodeId) {
+            event.preventDefault();
+            event.stopPropagation();
+            event.currentTarget.classList.remove('drag-over-target');
+            document.getElementById('structure-canvas').classList.remove('drag-over-canvas');
+
+            let payload = draggedPayload;
+            if (!payload) {
+                try {
+                    payload = JSON.parse(event.dataTransfer.getData('text/plain'));
+                } catch (e) {}
+            }
+            if (!payload || payload.tipe !== 'divisi') return;
+
+            const targetNode = findNodeById(treeData, targetNodeId);
+            if (!targetNode) return;
+
+            // Jika memindahkan node divisi yang sudah ada di dalam tree
+            if (payload.existingNodeId) {
+                if (payload.existingNodeId === targetNodeId) return;
+                const movingNode = findNodeById(treeData, payload.existingNodeId);
+                if (!movingNode) return;
+                // Cegah drop induk ke dalam anaknya sendiri
+                if (isDescendant(movingNode, targetNodeId)) {
+                    showAlert('Tidak dapat memindahkan divisi induk ke dalam sub-divisinya sendiri.', 'error');
+                    return;
+                }
+                removeNodeById(treeData, payload.existingNodeId);
+                targetNode.children = targetNode.children || [];
+                targetNode.children.push(movingNode);
+                renderStructure();
+                draggedPayload = null;
+                return;
+            }
+
+            // Tambah divisi baru di bawah targetNode (Perusahaan atau Divisi induk)
+            targetNode.children = targetNode.children || [];
+            targetNode.children.push({
+                nodeId: genNodeId(),
+                tipe: 'divisi',
+                refId: Number(payload.refId),
+                nama: payload.nama,
+                children: []
+            });
+            renderStructure();
+            draggedPayload = null;
+        }
+
+        function findNodeById(nodes, nodeId) {
+            for (const n of nodes) {
+                if (n.nodeId === nodeId) return n;
+                if (n.children && n.children.length > 0) {
+                    const found = findNodeById(n.children, nodeId);
+                    if (found) return found;
+                }
+            }
+            return null;
+        }
+
+        function isDescendant(parentNode, checkNodeId) {
+            if (!parentNode.children || parentNode.children.length === 0) return false;
+            for (const ch of parentNode.children) {
+                if (ch.nodeId === checkNodeId) return true;
+                if (isDescendant(ch, checkNodeId)) return true;
+            }
+            return false;
+        }
+
+        function removeNodeById(nodes, nodeId) {
+            for (let i = 0; i < nodes.length; i++) {
+                if (nodes[i].nodeId === nodeId) {
+                    nodes.splice(i, 1);
+                    return true;
+                }
+                if (nodes[i].children && nodes[i].children.length > 0) {
+                    if (removeNodeById(nodes[i].children, nodeId)) return true;
+                }
+            }
+            return false;
+        }
+
+        function handleRemoveNode(nodeId) {
+            removeNodeById(treeData, nodeId);
+            renderStructure();
+        }
+
+        function renderDivisionChildren(children) {
+            if (!children || children.length === 0) return '';
+            let html = '<ul class="tree-children">';
+            children.forEach(div => {
+                const safeNama = escapeHtml(div.nama);
+                html += `
+                    <li class="tree-division-item"
+                        draggable="true"
+                        ondragstart="onDragStartItem(event, 'divisi', '${div.refId}', ${JSON.stringify(div.nama).replace(/"/g, '&quot;')}, '${div.nodeId}')"
+                        ondragend="onDragEndItem(event)"
+                        ondragover="onNodeDragOver(event, '${div.nodeId}')"
+                        ondragleave="onNodeDragLeave(event)"
+                        ondrop="onNodeDrop(event, '${div.nodeId}')">
+                        <div class="tree-node-card">
+                            <div class="tree-node-info">
+                                <span class="drag-icon">&#9776;</span>
+                                <span class="badge-type badge-division">Divisi</span>
+                                <span class="division-title">${safeNama}</span>
+                            </div>
+                            <button type="button" class="btn-remove-node" onclick="handleRemoveNode('${div.nodeId}')" title="Hapus dari struktur">&times;</button>
+                        </div>
+                        ${renderDivisionChildren(div.children)}
+                    </li>
+                `;
+            });
+            html += '</ul>';
+            return html;
+        }
+
+        function renderStructure() {
+            const canvas = document.getElementById('structure-canvas');
+            if (!canvas) return;
+
+            if (!treeData || treeData.length === 0) {
+                canvas.innerHTML = `
+                    <div class="empty-tree-placeholder">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                        </svg>
+                        <h3>Struktur Perusahaan Masih Kosong</h3>
+                        <p>Tarik (Drag &amp; Drop) <strong>Perusahaan</strong> dari tabel di sebelah kiri ke area ini,<br>kemudian tarik <strong>Divisi</strong> ke bawah Perusahaan secara bertingkat.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '<ul class="tree-root-list">';
+            treeData.forEach(comp => {
+                const safeNama = escapeHtml(comp.nama);
+                html += `
+                    <li class="tree-company-item"
+                        ondragover="onNodeDragOver(event, '${comp.nodeId}')"
+                        ondragleave="onNodeDragLeave(event)"
+                        ondrop="onNodeDrop(event, '${comp.nodeId}')">
+                        <div class="tree-node-card">
+                            <div class="tree-node-info">
+                                <span class="badge-type badge-company">Perusahaan</span>
+                                <span class="company-title">${safeNama}</span>
+                            </div>
+                            <button type="button" class="btn-remove-node" onclick="handleRemoveNode('${comp.nodeId}')" title="Hapus perusahaan dari struktur">&times;</button>
+                        </div>
+                        ${renderDivisionChildren(comp.children)}
+                        <div class="drop-sub-hint">+ Tarik Divisi ke kotak ini untuk menambahkan divisi di bawah <strong>${safeNama}</strong> (atau tarik ke atas Divisi untuk membuat sub-divisi bertingkat)</div>
+                    </li>
+                `;
+            });
+            html += '</ul>';
+            canvas.innerHTML = html;
+        }
+
+        async function saveStructure() {
+            const btn = document.getElementById('btn-save-structure');
+            const origHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerText = 'Menyimpan...';
+
+            try {
+                const res = await fetch('/api/struktur-perusahaan/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tree: treeData })
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    showAlert(data.message || 'Struktur perusahaan berhasil disimpan!', 'success');
+                } else {
+                    showAlert(data.error || 'Gagal menyimpan struktur perusahaan.', 'error');
+                }
+            } catch (err) {
+                showAlert('Terjadi kesalahan saat menyimpan struktur: ' + err.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = origHtml;
+            }
+        }
+
+        // Inisialisasi tampilan struktur saat halaman dimuat
+        renderStructure();
+    </script>
+</body>
+</html>
