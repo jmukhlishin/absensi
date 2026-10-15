@@ -95,15 +95,25 @@ const db = new sqlite3.Database(dbPath, (err) => {
             db.run(`CREATE TABLE IF NOT EXISTS karyawan (
                 uid TEXT PRIMARY KEY,
                 nama TEXT NOT NULL,
-                jabatan TEXT DEFAULT ''
+                jabatan TEXT DEFAULT '',
+                perusahaan TEXT DEFAULT '',
+                divisi TEXT DEFAULT ''
             )`);
 
-            // Pastikan kolom jabatan tersedia untuk database yang sudah ada sebelumnya
+            // Pastikan kolom jabatan, perusahaan, dan divisi tersedia untuk database yang sudah ada sebelumnya
             db.all(`PRAGMA table_info(karyawan)`, (pragmaErr, columns) => {
                 if (!pragmaErr && Array.isArray(columns)) {
                     const hasJabatan = columns.some(col => col.name === 'jabatan');
                     if (!hasJabatan) {
                         db.run(`ALTER TABLE karyawan ADD COLUMN jabatan TEXT DEFAULT ''`);
+                    }
+                    const hasPerusahaan = columns.some(col => col.name === 'perusahaan');
+                    if (!hasPerusahaan) {
+                        db.run(`ALTER TABLE karyawan ADD COLUMN perusahaan TEXT DEFAULT ''`);
+                    }
+                    const hasDivisi = columns.some(col => col.name === 'divisi');
+                    if (!hasDivisi) {
+                        db.run(`ALTER TABLE karyawan ADD COLUMN divisi TEXT DEFAULT ''`);
                     }
                 }
             });
@@ -632,19 +642,37 @@ app.post('/absen', async (req, res) => {
 });
 
 // CRUD Karyawan - List
-app.get('/karyawan', (req, res) => {
-    db.all('SELECT uid, nama, COALESCE(jabatan, "") as jabatan FROM karyawan ORDER BY CAST(uid AS INTEGER) ASC, uid ASC', [], (err, rows) => {
-        if (err) return res.status(500).send('Gagal memuat data karyawan.');
-        res.render('karyawan', { karyawan: rows });
-    });
+app.get('/karyawan', async (req, res) => {
+    try {
+        const [rows, perusahaanRows, divisiRows, strukturRows] = await Promise.all([
+            dbAll(`SELECT uid, nama, COALESCE(jabatan, '') as jabatan, COALESCE(perusahaan, '') as perusahaan, COALESCE(divisi, '') as divisi FROM karyawan ORDER BY CAST(uid AS INTEGER) ASC, uid ASC`),
+            dbAll(`SELECT id, nama FROM perusahaan ORDER BY id ASC`),
+            dbAll(`SELECT id, nama FROM divisi ORDER BY id ASC`),
+            dbAll(`SELECT node_id, tipe, ref_id, nama, parent_node_id, urutan FROM struktur_perusahaan ORDER BY urutan ASC, id ASC`)
+        ]);
+
+        const strukturTree = buildStrukturTreeFromRows(strukturRows);
+
+        res.render('karyawan', {
+            karyawan: rows,
+            perusahaanList: perusahaanRows,
+            divisiList: divisiRows,
+            strukturTree: strukturTree
+        });
+    } catch (err) {
+        console.error('Gagal memuat data karyawan:', err);
+        res.status(500).send('Gagal memuat data karyawan.');
+    }
 });
 
 // CRUD Karyawan - Add
 app.post('/karyawan/add', async (req, res) => {
     try {
-        let { uid, nama, jabatan } = req.body;
+        let { uid, nama, jabatan, perusahaan, divisi } = req.body;
         nama = (nama || '').trim();
         jabatan = (jabatan || '').trim();
+        perusahaan = (perusahaan || '').trim();
+        divisi = (divisi || '').trim();
         uid = (uid || '').trim();
 
         if (!uid) {
@@ -653,7 +681,10 @@ app.post('/karyawan/add', async (req, res) => {
             uid = String(nextUid);
         }
 
-        await dbRun('INSERT OR REPLACE INTO karyawan (uid, nama, jabatan) VALUES (?, ?, ?)', [uid, nama, jabatan]);
+        await dbRun(
+            'INSERT OR REPLACE INTO karyawan (uid, nama, jabatan, perusahaan, divisi) VALUES (?, ?, ?, ?, ?)',
+            [uid, nama, jabatan, perusahaan, divisi]
+        );
         res.redirect('/karyawan');
     } catch (err) {
         console.error('Gagal menambah karyawan:', err);
@@ -664,7 +695,7 @@ app.post('/karyawan/add', async (req, res) => {
 // CRUD Karyawan - Edit (Form)
 app.get('/karyawan/edit/:uid', (req, res) => {
     const uid = req.params.uid;
-    db.get('SELECT uid, nama, COALESCE(jabatan, "") as jabatan FROM karyawan WHERE uid = ?', [uid], (err, row) => {
+    db.get('SELECT uid, nama, COALESCE(jabatan, "") as jabatan, COALESCE(perusahaan, "") as perusahaan, COALESCE(divisi, "") as divisi FROM karyawan WHERE uid = ?', [uid], (err, row) => {
         if (err || !row) return res.redirect('/karyawan');
         res.render('karyawan_edit', { k: row });
     });
@@ -676,9 +707,15 @@ app.post('/karyawan/edit/:uid', (req, res) => {
     const uid = (req.body.uid || old_uid).trim();
     const nama = (req.body.nama || '').trim();
     const jabatan = (req.body.jabatan || '').trim();
-    db.run('UPDATE karyawan SET uid = ?, nama = ?, jabatan = ? WHERE uid = ?', [uid, nama, jabatan, old_uid], () => {
-        res.redirect('/karyawan');
-    });
+    const perusahaan = (req.body.perusahaan || '').trim();
+    const divisi = (req.body.divisi || '').trim();
+    db.run(
+        'UPDATE karyawan SET uid = ?, nama = ?, jabatan = ?, perusahaan = ?, divisi = ? WHERE uid = ?',
+        [uid, nama, jabatan, perusahaan, divisi, old_uid],
+        () => {
+            res.redirect('/karyawan');
+        }
+    );
 });
 
 // CRUD Karyawan - Delete
