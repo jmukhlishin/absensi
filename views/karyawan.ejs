@@ -103,6 +103,7 @@
         
         .header-actions {
             display: flex;
+            flex-wrap: wrap;
             gap: 10px;
         }
 
@@ -144,6 +145,62 @@
         .btn-upload:hover {
             background-color: var(--primary-blue);
             transform: translateY(-1px);
+        }
+
+        .btn-export {
+            padding: 10px 20px;
+            background-color: #16a34a;
+            color: var(--white);
+            cursor: pointer;
+            border: none;
+            font-weight: 700;
+            border-radius: 8px;
+            font-size: 15px;
+            transition: all 0.2s ease;
+            box-shadow: 0 3px 8px rgba(22, 163, 74, 0.2);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-export:hover {
+            background-color: #15803d;
+            transform: translateY(-1px);
+        }
+
+        .export-option-card {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 14px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .export-option-card:hover {
+            border-color: var(--secondary-blue);
+            background-color: #f8fafc;
+        }
+        .export-option-card input[type="radio"] {
+            margin-top: 3px;
+            width: 18px;
+            height: 18px;
+            accent-color: var(--primary-blue);
+            cursor: pointer;
+        }
+        .export-option-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .export-option-title {
+            font-weight: 700;
+            font-size: 15px;
+            color: var(--primary-blue);
+        }
+        .export-option-desc {
+            font-size: 13px;
+            color: var(--text-muted);
         }
 
         .table-responsive {
@@ -465,7 +522,7 @@
             .header-actions {
                 flex-direction: column;
             }
-            .btn-open-modal, .btn-upload {
+            .btn-open-modal, .btn-upload, .btn-export {
                 width: 100%;
                 justify-content: center;
             }
@@ -503,6 +560,10 @@
         <div class="header-bar">
             <h2>Daftar Karyawan</h2>
             <div class="header-actions">
+                <button type="button" class="btn-export" onclick="openExportModal()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    Ekspor Data Karyawan
+                </button>
                 <button type="button" class="btn-upload" onclick="openUploadSelectModal()">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                     Upload Data ke Mesin
@@ -541,6 +602,42 @@
                     <% } %>
                 </tbody>
             </table>
+        </div>
+    </div>
+
+    <!-- Modal Popup Ekspor Data Karyawan -->
+    <div id="export-karyawan-modal" class="modal-overlay" onclick="handleOverlayClick(event)">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Ekspor Data ke Excel (.xlsx)</h3>
+                <button type="button" class="btn-close-x" onclick="closeExportModal()" title="Tutup">&times;</button>
+            </div>
+            <form class="modal-form" action="/karyawan/export" method="GET" onsubmit="closeExportModal()">
+                <div class="form-group">
+                    <label>Pilih Jenis Data yang Ingin Diekspor:</label>
+                    <label class="export-option-card">
+                        <input type="radio" name="type" value="karyawan" checked>
+                        <div class="export-option-info">
+                            <span class="export-option-title">Data Karyawan Saja</span>
+                            <span class="export-option-desc">Mengekspor daftar ID, Nama Karyawan, dan Jabatan/Bagian ke file Excel (.xlsx).</span>
+                        </div>
+                    </label>
+                    <label class="export-option-card">
+                        <input type="radio" name="type" value="karyawan_absensi">
+                        <div class="export-option-info">
+                            <span class="export-option-title">Data Karyawan Serta Absensi</span>
+                            <span class="export-option-desc">Mengekspor daftar karyawan beserta riwayat dan rekapitulasi absensi lengkap ke file Excel (.xlsx).</span>
+                        </div>
+                    </label>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-cancel" onclick="closeExportModal()">Batal</button>
+                    <button type="submit" class="btn-export">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        Download Excel (.xlsx)
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -687,6 +784,16 @@
             modal.classList.remove('active');
         }
 
+        function openExportModal() {
+            const modal = document.getElementById('export-karyawan-modal');
+            modal.classList.add('active');
+        }
+
+        function closeExportModal() {
+            const modal = document.getElementById('export-karyawan-modal');
+            modal.classList.remove('active');
+        }
+
         function openUploadSelectModal() {
             const modal = document.getElementById('upload-select-modal');
             modal.classList.add('active');
@@ -702,6 +809,8 @@
                 closeAddModal();
             } else if (e.target.id === 'upload-select-modal') {
                 closeUploadSelectModal();
+            } else if (e.target.id === 'export-karyawan-modal') {
+                closeExportModal();
             }
         }
 
@@ -709,6 +818,7 @@
             if (e.key === 'Escape') {
                 closeAddModal();
                 closeUploadSelectModal();
+                closeExportModal();
             }
             if (document.body.classList.contains('upload-locked')) {
                 e.preventDefault();
