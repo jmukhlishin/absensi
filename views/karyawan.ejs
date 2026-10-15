@@ -25,7 +25,7 @@
             color: var(--text-dark);
         }
         .container {
-            max-width: 960px;
+            max-width: 1050px;
             margin: auto;
             background: var(--white);
             padding: 28px;
@@ -112,6 +112,29 @@
             flex-wrap: wrap;
             gap: 12px;
             margin-bottom: 16px;
+        }
+        .header-title-group {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 14px;
+        }
+        .filter-perusahaan-select {
+            padding: 9px 14px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--primary-blue);
+            background-color: var(--light-blue);
+            border: 1.5px solid #90caf9;
+            border-radius: 8px;
+            cursor: pointer;
+            outline: none;
+            min-width: 210px;
+            transition: all 0.2s ease;
+        }
+        .filter-perusahaan-select:focus {
+            border-color: var(--secondary-blue);
+            box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.15);
         }
         
         .header-actions {
@@ -227,7 +250,7 @@
         }
         table {
             width: 100%;
-            min-width: 520px;
+            min-width: 680px;
             border-collapse: collapse;
         }
         th, td {
@@ -268,7 +291,7 @@
         .action-links {
             white-space: nowrap;
         }
-        .action-links a {
+        .action-links a, .action-links button {
             margin-right: 8px;
             text-decoration: none;
             color: white;
@@ -277,6 +300,9 @@
             font-size: 13px;
             font-weight: 600;
             display: inline-block;
+            border: none;
+            cursor: pointer;
+            font-family: inherit;
         }
         .btn-edit {
             background-color: var(--primary-yellow);
@@ -362,14 +388,16 @@
             font-size: 14px;
             color: var(--primary-blue);
         }
-        .form-group input {
+        .form-group input, .form-group select {
             padding: 11px 14px;
             font-size: 15px;
             border: 1px solid #cbd5e1;
             border-radius: 8px;
             width: 100%;
+            background-color: var(--white);
+            color: var(--text-dark);
         }
-        .form-group input:focus {
+        .form-group input:focus, .form-group select:focus {
             outline: none;
             border-color: var(--secondary-blue);
             box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.15);
@@ -535,6 +563,13 @@
                 flex-direction: column;
                 align-items: stretch;
             }
+            .header-title-group {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .filter-perusahaan-select {
+                width: 100%;
+            }
             .header-actions {
                 flex-direction: column;
             }
@@ -560,6 +595,30 @@
     </style>
 </head>
 <body>
+    <%
+        // Kumpulkan daftar perusahaan dari struktur perusahaan (prioritas), tabel perusahaan, dan data karyawan
+        const strukturTreeData = typeof strukturTree !== 'undefined' && Array.isArray(strukturTree) ? strukturTree : [];
+        const perusahaanMaster = typeof perusahaanList !== 'undefined' && Array.isArray(perusahaanList) ? perusahaanList : [];
+        const divisiMaster = typeof divisiList !== 'undefined' && Array.isArray(divisiList) ? divisiList : [];
+
+        const perusahaanSet = new Set();
+        strukturTreeData.forEach(node => {
+            if (node && node.tipe === 'perusahaan' && node.nama) {
+                perusahaanSet.add(String(node.nama).trim());
+            }
+        });
+        perusahaanMaster.forEach(p => {
+            if (p && p.nama) perusahaanSet.add(String(p.nama).trim());
+        });
+        if (Array.isArray(karyawan)) {
+            karyawan.forEach(k => {
+                if (k && k.perusahaan && String(k.perusahaan).trim()) {
+                    perusahaanSet.add(String(k.perusahaan).trim());
+                }
+            });
+        }
+        const daftarPerusahaan = Array.from(perusahaanSet);
+    %>
     <div class="container">
         <div class="nav">
             <div class="nav-links">
@@ -577,7 +636,15 @@
         <h1>Manajemen Karyawan</h1>
         
         <div class="header-bar">
-            <h2>Daftar Karyawan</h2>
+            <div class="header-title-group">
+                <h2>Daftar Karyawan</h2>
+                <select id="filter-perusahaan" class="filter-perusahaan-select" onchange="filterByPerusahaan()">
+                    <option value="">Semua Perusahaan</option>
+                    <% daftarPerusahaan.forEach(namaPerusahaan => { %>
+                        <option value="<%= namaPerusahaan %>"><%= namaPerusahaan %></option>
+                    <% }) %>
+                </select>
+            </div>
             <div class="header-actions">
                 <button type="button" class="btn-export" onclick="openExportModal()">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
@@ -597,6 +664,8 @@
                     <tr>
                         <th class="sortable" onclick="sortTable('id')">ID <span id="sort-icon-id" class="sort-icon">&#9650;</span></th>
                         <th class="sortable" onclick="sortTable('nama')">Nama <span id="sort-icon-nama" class="sort-icon">&#8645;</span></th>
+                        <th>Perusahaan</th>
+                        <th>Divisi</th>
                         <th>Jabatan/Bagian</th>
                         <th>Aksi</th>
                     </tr>
@@ -604,19 +673,27 @@
                 <tbody id="karyawan-tbody">
                     <% if (karyawan.length > 0) { %>
                         <% karyawan.forEach(k => { %>
-                            <tr data-id="<%= k.uid %>" data-nama="<%= k.nama %>">
+                            <tr data-id="<%= k.uid %>" data-nama="<%= k.nama %>" data-perusahaan="<%= k.perusahaan || '' %>">
                                 <td><%= k.uid %></td>
                                 <td><strong><%= k.nama %></strong></td>
+                                <td><%= k.perusahaan || '-' %></td>
+                                <td><%= k.divisi || '-' %></td>
                                 <td><%= k.jabatan || '-' %></td>
                                 <td class="action-links">
-                                    <a href="/karyawan/edit/<%= k.uid %>" class="btn-edit">Edit</a>
+                                    <button type="button" class="btn-edit"
+                                        data-uid="<%= k.uid %>"
+                                        data-nama="<%= k.nama %>"
+                                        data-perusahaan="<%= k.perusahaan || '' %>"
+                                        data-divisi="<%= k.divisi || '' %>"
+                                        data-jabatan="<%= k.jabatan || '' %>"
+                                        onclick="openEditModalFromBtn(this)">Edit</button>
                                     <a href="/karyawan/delete/<%= k.uid %>" class="btn-delete" onclick="return confirm('Yakin ingin menghapus karyawan ini?')">Hapus</a>
                                 </td>
                             </tr>
                         <% }) %>
                     <% } else { %>
-                        <tr>
-                            <td colspan="4" style="text-align: center;">Belum ada data karyawan.</td>
+                        <tr id="empty-karyawan-row">
+                            <td colspan="6" style="text-align: center;">Belum ada data karyawan.</td>
                         </tr>
                     <% } %>
                 </tbody>
@@ -720,12 +797,64 @@
                     <input type="text" id="input-nama" name="nama" placeholder="Masukkan nama karyawan" required>
                 </div>
                 <div class="form-group">
+                    <label for="add-perusahaan">Perusahaan</label>
+                    <select id="add-perusahaan" name="perusahaan" onchange="onPerusahaanChange('add')">
+                        <option value="">-- Pilih Perusahaan --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="add-divisi">Divisi</label>
+                    <select id="add-divisi" name="divisi">
+                        <option value="">-- Pilih Divisi --</option>
+                    </select>
+                </div>
+                <div class="form-group">
                     <label for="input-jabatan">Jabatan / Bagian</label>
                     <input type="text" id="input-jabatan" name="jabatan" placeholder="Masukkan jabatan atau bagian" required>
                 </div>
                 <div class="modal-actions">
                     <button type="button" class="btn-cancel" onclick="closeAddModal()">Batal</button>
                     <button type="submit" class="btn-submit">Simpan Karyawan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Popup Edit Karyawan -->
+    <div id="edit-karyawan-modal" class="modal-overlay" onclick="handleOverlayClick(event)">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Edit Karyawan</h3>
+                <button type="button" class="btn-close-x" onclick="closeEditModal()" title="Tutup">&times;</button>
+            </div>
+            <form id="edit-karyawan-form" class="modal-form" method="POST">
+                <div class="form-group">
+                    <label for="edit-uid">ID</label>
+                    <input type="text" id="edit-uid" name="uid" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit-nama">Nama Karyawan</label>
+                    <input type="text" id="edit-nama" name="nama" placeholder="Masukkan nama karyawan" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit-perusahaan">Perusahaan</label>
+                    <select id="edit-perusahaan" name="perusahaan" onchange="onPerusahaanChange('edit')">
+                        <option value="">-- Pilih Perusahaan --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="edit-divisi">Divisi</label>
+                    <select id="edit-divisi" name="divisi">
+                        <option value="">-- Pilih Divisi --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="edit-jabatan">Jabatan / Bagian</label>
+                    <input type="text" id="edit-jabatan" name="jabatan" placeholder="Masukkan jabatan atau bagian">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-cancel" onclick="closeEditModal()">Batal</button>
+                    <button type="submit" class="btn-submit">Simpan Perubahan</button>
                 </div>
             </form>
         </div>
@@ -745,8 +874,164 @@
     </div>
 
     <script>
+        const STRUKTUR_TREE = <%- JSON.stringify(typeof strukturTree !== 'undefined' ? strukturTree : []) %>;
+        const PERUSAHAAN_MASTER = <%- JSON.stringify(typeof perusahaanList !== 'undefined' ? perusahaanList : []) %>;
+        const DIVISI_MASTER = <%- JSON.stringify(typeof divisiList !== 'undefined' ? divisiList : []) %>;
+
         let currentSortColumn = 'id';
         let currentSortOrder = 'asc';
+
+        // Ambil semua perusahaan dari struktur perusahaan (dan master perusahaan)
+        function getPerusahaanOptions() {
+            const set = new Set();
+            if (Array.isArray(STRUKTUR_TREE)) {
+                STRUKTUR_TREE.forEach(node => {
+                    if (node && node.tipe === 'perusahaan' && node.nama) {
+                        set.add(String(node.nama).trim());
+                    }
+                });
+            }
+            if (Array.isArray(PERUSAHAAN_MASTER)) {
+                PERUSAHAAN_MASTER.forEach(p => {
+                    if (p && p.nama) set.add(String(p.nama).trim());
+                });
+            }
+            return Array.from(set);
+        }
+
+        // Ambil daftar divisi berdasarkan perusahaan yang dipilih dari Struktur Perusahaan (hierarki/tree)
+        function getDivisiOptionsForPerusahaan(namaPerusahaan) {
+            const options = [];
+            const seen = new Set();
+
+            function collectDivisi(children, depth) {
+                if (!Array.isArray(children)) return;
+                children.forEach(child => {
+                    if (!child || !child.nama) return;
+                    const cleanName = String(child.nama).trim();
+                    if (child.tipe === 'divisi' && cleanName) {
+                        if (!seen.has(cleanName)) {
+                            seen.add(cleanName);
+                            const prefix = depth > 0 ? '— '.repeat(depth) : '';
+                            options.push({ value: cleanName, label: prefix + cleanName });
+                        }
+                    }
+                    if (Array.isArray(child.children) && child.children.length > 0) {
+                        collectDivisi(child.children, depth + 1);
+                    }
+                });
+            }
+
+            if (namaPerusahaan && Array.isArray(STRUKTUR_TREE)) {
+                STRUKTUR_TREE.forEach(rootNode => {
+                    if (rootNode && rootNode.tipe === 'perusahaan' && String(rootNode.nama).trim() === String(namaPerusahaan).trim()) {
+                        collectDivisi(rootNode.children, 0);
+                    }
+                });
+            }
+
+            // Fallback: jika perusahaan belum memiliki divisi di tree atau perusahaan belum dipilih, tampilkan divisi dari struktur/master
+            if (options.length === 0) {
+                if (Array.isArray(STRUKTUR_TREE)) {
+                    STRUKTUR_TREE.forEach(rootNode => {
+                        if (rootNode && rootNode.tipe === 'divisi' && rootNode.nama) {
+                            const cleanName = String(rootNode.nama).trim();
+                            if (!seen.has(cleanName)) {
+                                seen.add(cleanName);
+                                options.push({ value: cleanName, label: cleanName });
+                            }
+                        }
+                        if (rootNode && Array.isArray(rootNode.children)) {
+                            collectDivisi(rootNode.children, 0);
+                        }
+                    });
+                }
+                if (options.length === 0 && Array.isArray(DIVISI_MASTER)) {
+                    DIVISI_MASTER.forEach(d => {
+                        if (d && d.nama) {
+                            const cleanName = String(d.nama).trim();
+                            if (cleanName && !seen.has(cleanName)) {
+                                seen.add(cleanName);
+                                options.push({ value: cleanName, label: cleanName });
+                            }
+                        }
+                    });
+                }
+            }
+
+            return options;
+        }
+
+        function populatePerusahaanSelect(selectId, selectedValue) {
+            const selectEl = document.getElementById(selectId);
+            if (!selectEl) return;
+            const list = getPerusahaanOptions();
+            if (selectedValue && !list.includes(selectedValue)) {
+                list.push(selectedValue);
+            }
+            let html = '<option value="">-- Pilih Perusahaan --</option>';
+            list.forEach(p => {
+                const isSelected = p === selectedValue ? ' selected' : '';
+                const escaped = p.replace(/"/g, '&quot;');
+                html += `<option value="${escaped}"${isSelected}>${p}</option>`;
+            });
+            selectEl.innerHTML = html;
+        }
+
+        function populateDivisiSelect(selectId, namaPerusahaan, selectedDivisi) {
+            const selectEl = document.getElementById(selectId);
+            if (!selectEl) return;
+            const list = getDivisiOptionsForPerusahaan(namaPerusahaan);
+            if (selectedDivisi && !list.some(item => item.value === selectedDivisi)) {
+                list.push({ value: selectedDivisi, label: selectedDivisi });
+            }
+            let html = '<option value="">-- Pilih Divisi --</option>';
+            list.forEach(item => {
+                const isSelected = item.value === selectedDivisi ? ' selected' : '';
+                const escaped = item.value.replace(/"/g, '&quot;');
+                html += `<option value="${escaped}"${isSelected}>${item.label}</option>`;
+            });
+            selectEl.innerHTML = html;
+        }
+
+        function onPerusahaanChange(mode) {
+            if (mode === 'edit') {
+                const perusahaanVal = document.getElementById('edit-perusahaan').value;
+                populateDivisiSelect('edit-divisi', perusahaanVal, '');
+            } else if (mode === 'add') {
+                const perusahaanVal = document.getElementById('add-perusahaan').value;
+                populateDivisiSelect('add-divisi', perusahaanVal, '');
+            }
+        }
+
+        // Filter Daftar Karyawan berdasarkan Perusahaan
+        function filterByPerusahaan() {
+            const filterVal = (document.getElementById('filter-perusahaan').value || '').trim();
+            const tbody = document.getElementById('karyawan-tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr[data-id]'));
+            const existingFilterEmpty = document.getElementById('filter-empty-row');
+            if (existingFilterEmpty) existingFilterEmpty.remove();
+
+            if (rows.length === 0) return;
+
+            let visibleCount = 0;
+            rows.forEach(row => {
+                const rowPerusahaan = (row.getAttribute('data-perusahaan') || '').trim();
+                if (!filterVal || rowPerusahaan === filterVal) {
+                    row.style.display = '';
+                    visibleCount++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            if (visibleCount === 0) {
+                const tr = document.createElement('tr');
+                tr.id = 'filter-empty-row';
+                tr.innerHTML = '<td colspan="6" style="text-align: center;">Tidak ada data karyawan pada perusahaan ini.</td>';
+                tbody.appendChild(tr);
+            }
+        }
 
         function sortTable(column) {
             const tbody = document.getElementById('karyawan-tbody');
@@ -783,6 +1068,9 @@
 
             rows.forEach(row => tbody.appendChild(row));
 
+            const filterEmptyRow = document.getElementById('filter-empty-row');
+            if (filterEmptyRow) tbody.appendChild(filterEmptyRow);
+
             document.getElementById('sort-icon-id').innerText = '⇅';
             document.getElementById('sort-icon-nama').innerText = '⇅';
             const activeIcon = document.getElementById('sort-icon-' + column);
@@ -792,6 +1080,8 @@
         }
 
         function openAddModal() {
+            populatePerusahaanSelect('add-perusahaan', '');
+            populateDivisiSelect('add-divisi', '', '');
             const modal = document.getElementById('add-karyawan-modal');
             modal.classList.add('active');
             const namaInput = document.getElementById('input-nama');
@@ -800,6 +1090,32 @@
 
         function closeAddModal() {
             const modal = document.getElementById('add-karyawan-modal');
+            modal.classList.remove('active');
+        }
+
+        function openEditModalFromBtn(btn) {
+            const uid = btn.getAttribute('data-uid') || '';
+            const nama = btn.getAttribute('data-nama') || '';
+            const perusahaan = btn.getAttribute('data-perusahaan') || '';
+            const divisi = btn.getAttribute('data-divisi') || '';
+            const jabatan = btn.getAttribute('data-jabatan') || '';
+
+            const form = document.getElementById('edit-karyawan-form');
+            form.action = '/karyawan/edit/' + encodeURIComponent(uid);
+
+            document.getElementById('edit-uid').value = uid;
+            document.getElementById('edit-nama').value = nama;
+            document.getElementById('edit-jabatan').value = jabatan;
+
+            populatePerusahaanSelect('edit-perusahaan', perusahaan);
+            populateDivisiSelect('edit-divisi', perusahaan, divisi);
+
+            const modal = document.getElementById('edit-karyawan-modal');
+            modal.classList.add('active');
+        }
+
+        function closeEditModal() {
+            const modal = document.getElementById('edit-karyawan-modal');
             modal.classList.remove('active');
         }
 
@@ -826,6 +1142,8 @@
         function handleOverlayClick(e) {
             if (e.target.id === 'add-karyawan-modal') {
                 closeAddModal();
+            } else if (e.target.id === 'edit-karyawan-modal') {
+                closeEditModal();
             } else if (e.target.id === 'upload-select-modal') {
                 closeUploadSelectModal();
             } else if (e.target.id === 'export-karyawan-modal') {
@@ -836,6 +1154,7 @@
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
                 closeAddModal();
+                closeEditModal();
                 closeUploadSelectModal();
                 closeExportModal();
             }
