@@ -71,6 +71,12 @@
             gap: 10px;
             box-shadow: 0 4px 12px rgba(13, 71, 161, 0.18);
         }
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
         .nav a {
             text-decoration: none;
             color: var(--primary-blue);
@@ -86,10 +92,17 @@
             box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
         }
         .nav a:hover {
-            text-decoration: none;
             background: #ffd54f;
             transform: translateY(-1px);
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        }
+        .nav a.nav-secondary {
+            background: rgba(255, 255, 255, 0.15);
+            color: var(--white);
+        }
+        .nav a.nav-secondary:hover {
+            background: var(--primary-yellow);
+            color: var(--primary-blue);
         }
 
         .header-bar {
@@ -241,6 +254,7 @@
         }
         th.sortable:hover {
             background-color: rgba(255, 255, 255, 0.1);
+            color: var(--primary-yellow);
         }
         .sort-icon {
             display: inline-block;
@@ -546,13 +560,16 @@
 <body>
     <div class="container">
         <div class="nav">
-            <a href="/">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="19" y1="12" x2="5" y2="12"></line>
-                    <polyline points="12 19 5 12 12 5"></polyline>
-                </svg>
-                Kembali ke Dashboard
-            </a>
+            <div class="nav-links">
+                <a href="/">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="19" y1="12" x2="5" y2="12"></line>
+                        <polyline points="12 19 5 12 12 5"></polyline>
+                    </svg>
+                    Kembali ke Dashboard
+                </a>
+                <a href="/struktur-perusahaan" class="nav-secondary">Struktur Perusahaan</a>
+            </div>
         </div>
         
         <h1>Manajemen Karyawan</h1>
@@ -576,8 +593,8 @@
             <table id="karyawan-table">
                 <thead>
                     <tr>
-                        <th class="sortable" onclick="sortTable('id')">ID <span id="sort-icon-id" class="sort-icon">▲</span></th>
-                        <th class="sortable" onclick="sortTable('nama')">Nama <span id="sort-icon-nama" class="sort-icon">⇅</span></th>
+                        <th class="sortable" onclick="sortTable('id')">ID <span id="sort-icon-id" class="sort-icon">&#9650;</span></th>
+                        <th class="sortable" onclick="sortTable('nama')">Nama <span id="sort-icon-nama" class="sort-icon">&#9660;</span></th>
                         <th>Jabatan/Bagian</th>
                         <th>Aksi</th>
                     </tr>
@@ -764,8 +781,8 @@
 
             rows.forEach(row => tbody.appendChild(row));
 
-            document.getElementById('sort-icon-id').innerText = '⇅';
-            document.getElementById('sort-icon-nama').innerText = '⇅';
+            document.getElementById('sort-icon-id').innerText = '▼';
+            document.getElementById('sort-icon-nama').innerText = '▼';
             const activeIcon = document.getElementById('sort-icon-' + column);
             if (activeIcon) {
                 activeIcon.innerText = currentSortOrder === 'asc' ? '▲' : '▼';
