@@ -27,7 +27,7 @@
             color: var(--text-dark);
         }
         .container {
-            max-width: 1050px;
+            max-width: 1120px;
             margin: auto;
             background: var(--white);
             padding: 28px;
@@ -126,48 +126,55 @@
         .nav {
             position: relative;
             display: flex;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 15px;
+            flex-direction: column;
+            gap: 14px;
             margin-bottom: 28px;
-            padding: 16px 68px 16px 20px;
+            padding: 16px 20px;
             background: linear-gradient(90deg, var(--primary-blue), var(--secondary-blue));
             border-radius: 12px;
             color: var(--white);
-            align-items: center;
             box-shadow: 0 4px 12px rgba(13, 71, 161, 0.18);
+        }
+        .nav-top-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
         .nav-links {
             display: flex;
             align-items: center;
-            gap: 12px;
-            flex-wrap: wrap;
+            gap: 8px;
+            flex-wrap: nowrap;
+            width: 100%;
         }
         .nav strong { color: var(--primary-yellow); }
         .nav a {
             text-decoration: none;
             color: var(--white);
             font-weight: 600;
-            padding: 8px 14px;
+            padding: 8px 12px;
+            font-size: 13.5px;
             border-radius: 8px;
             transition: all 0.2s ease;
             background: rgba(255, 255, 255, 0.12);
             text-align: center;
+            white-space: nowrap;
         }
         .nav a:hover {
             background: var(--primary-yellow);
             color: var(--primary-blue);
         }
         .btn-add-admin {
-            padding: 8px 14px;
+            padding: 8px 12px;
             border-radius: 8px;
             border: 1.5px solid var(--primary-yellow);
             background: var(--primary-yellow);
             color: var(--primary-blue);
             font-weight: 700;
-            font-size: 14px;
+            font-size: 13.5px;
             cursor: pointer;
             transition: all 0.2s ease;
+            white-space: nowrap;
         }
         .btn-add-admin:hover {
             background: #ffd54f;
@@ -178,7 +185,7 @@
         .profile-menu-container {
             position: absolute;
             top: 14px;
-            right: 16px;
+            right: 18px;
             z-index: 1001;
         }
         .profile-icon-btn {
@@ -417,24 +424,24 @@
         .print-form {
             display: flex;
             flex-direction: row;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin: 0;
-            padding: 6px 10px;
+            flex-wrap: nowrap;
+            gap: 6px;
+            margin: 0 0 0 auto;
+            padding: 5px 8px;
             background: rgba(255, 255, 255, 0.15);
             border-radius: 8px;
             align-items: center;
         }
         .print-form input[type="date"] {
-            padding: 6px 10px;
-            font-size: 13px;
+            padding: 5px 8px;
+            font-size: 12.5px;
             border: 1px solid rgba(255, 255, 255, 0.4);
             border-radius: 6px;
             background: var(--white);
             color: var(--text-dark);
         }
         .print-form button {
-            padding: 7px 14px;
+            padding: 6px 12px;
             font-size: 13px;
             background-color: var(--primary-yellow);
             color: var(--primary-blue);
@@ -443,6 +450,7 @@
             border: none;
             cursor: pointer;
             transition: all 0.2s ease;
+            white-space: nowrap;
         }
         .print-form button:hover {
             background-color: #ffd54f;
@@ -724,6 +732,14 @@
         .btn-close-modal:hover { background-color: var(--secondary-blue); }
 
         /* Media Queries untuk Mobile & Tablet */
+        @media (max-width: 950px) {
+            .nav-links {
+                flex-wrap: wrap;
+            }
+            .print-form {
+                margin: 0;
+            }
+        }
         @media (max-width: 768px) {
             body {
                 padding: 12px;
@@ -752,10 +768,13 @@
                 width: 100%;
             }
             .nav {
-                flex-direction: column;
-                align-items: stretch;
-                padding: 14px 60px 14px 14px;
+                padding: 14px;
                 gap: 12px;
+            }
+            .nav-top-row {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
             }
             .nav-links {
                 flex-direction: column;
@@ -769,8 +788,8 @@
                 padding: 10px;
             }
             .profile-menu-container {
-                top: 10px;
-                right: 12px;
+                top: 14px;
+                right: 14px;
             }
             .print-form {
                 flex-direction: column;
@@ -814,9 +833,40 @@
 </head>
 <body>
     <div class="container">
+        <!-- Ikon Profil Akun di Pojok Kanan Atas -->
+        <div class="profile-menu-container">
+            <button type="button" class="profile-icon-btn" id="profile-icon-btn" onclick="toggleProfileDropdown(event)" title="Menu Profil Akun">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+            </button>
+            <div class="profile-dropdown" id="profile-dropdown">
+                <div class="profile-dropdown-header">
+                    <span class="p-name"><%= typeof user !== 'undefined' && user ? user.nama : admin %></span>
+                    <span class="p-role">@<%= typeof user !== 'undefined' && user ? user.username : '' %> (<%= typeof user !== 'undefined' && user && user.role === 'superadmin' ? 'Superadmin' : 'Admin' %>)</span>
+                </div>
+                <button type="button" class="profile-dropdown-item" onclick="openProfileModal()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                    Profil
+                </button>
+                <a href="/logout" class="profile-dropdown-item logout-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                        <polyline points="16 17 21 12 16 7"></polyline>
+                        <line x1="21" y1="12" x2="9" y2="12"></line>
+                    </svg>
+                    Logout
+                </a>
+            </div>
+        </div>
+
         <div class="nav">
-            <div>
-                <strong>Login sebagai:</strong> <%= admin %>
+            <div class="nav-top-row">
+                <div><strong>Login sebagai:</strong> <%= admin %></div>
             </div>
             <div class="nav-links">
                 <a href="/">Dashboard</a>
@@ -831,37 +881,6 @@
                     <input type="date" name="end" required>
                     <button type="submit">Cetak Laporan</button>
                 </form>
-
-                <!-- Ikon Profil Akun di Pojok Kanan Atas -->
-                <div class="profile-menu-container">
-                    <button type="button" class="profile-icon-btn" id="profile-icon-btn" onclick="toggleProfileDropdown(event)" title="Menu Profil Akun">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="12" cy="7" r="4"></circle>
-                        </svg>
-                    </button>
-                    <div class="profile-dropdown" id="profile-dropdown">
-                        <div class="profile-dropdown-header">
-                            <span class="p-name"><%= typeof user !== 'undefined' && user ? user.nama : admin %></span>
-                            <span class="p-role">@<%= typeof user !== 'undefined' && user ? user.username : '' %> (<%= typeof user !== 'undefined' && user && user.role === 'superadmin' ? 'Superadmin' : 'Admin' %>)</span>
-                        </div>
-                        <button type="button" class="profile-dropdown-item" onclick="openProfileModal()">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                                <circle cx="12" cy="7" r="4"></circle>
-                            </svg>
-                            Profil
-                        </button>
-                        <a href="/logout" class="profile-dropdown-item logout-item">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                                <polyline points="16 17 21 12 16 7"></polyline>
-                                <line x1="21" y1="12" x2="9" y2="12"></line>
-                            </svg>
-                            Logout
-                        </a>
-                    </div>
-                </div>
             </div>
         </div>
 
