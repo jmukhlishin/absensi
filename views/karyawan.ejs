@@ -148,6 +148,8 @@
 
         .table-responsive {
             width: 100%;
+            max-height: 480px;
+            overflow-y: auto;
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
             border-radius: 10px;
@@ -163,11 +165,30 @@
             text-align: left;
             border-bottom: 1px solid #e2e8f0;
         }
-        th {
+        thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
             background: linear-gradient(90deg, var(--primary-blue), var(--secondary-blue));
+        }
+        th {
+            background: transparent;
             color: var(--primary-yellow);
             font-weight: 700;
             white-space: nowrap;
+        }
+        th.sortable {
+            cursor: pointer;
+            user-select: none;
+            transition: background-color 0.2s ease;
+        }
+        th.sortable:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        .sort-icon {
+            display: inline-block;
+            margin-left: 6px;
+            font-size: 12px;
         }
         tr:nth-child(even) { background-color: #f8fafc; }
         tr:hover { background-color: var(--light-yellow); }
@@ -192,7 +213,7 @@
         .btn-delete { background-color: #dc3545; }
         .btn-delete:hover { background-color: #b02a37; }
 
-        /* Modal Popup Tambah Karyawan */
+        /* Modal Popup */
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -220,6 +241,9 @@
             border-top: 6px solid var(--primary-yellow);
             position: relative;
             animation: modalFadeIn 0.2s ease-out;
+        }
+        .modal-card.modal-lg {
+            max-width: 620px;
         }
         @keyframes modalFadeIn {
             from { opacity: 0; transform: translateY(-10px); }
@@ -310,12 +334,26 @@
             background-color: #ffb300;
         }
 
-        /* Checkbox Styling */
+        /* Checkbox Styling & Upload Select Modal */
         input[type="checkbox"].karyawan-checkbox, #checkAll {
             width: 18px;
             height: 18px;
             cursor: pointer;
             accent-color: var(--primary-blue);
+        }
+        .upload-table-wrapper {
+            max-height: 340px;
+            overflow-y: auto;
+            overflow-x: auto;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            margin-bottom: 16px;
+        }
+        .upload-table-wrapper table {
+            min-width: 100%;
+        }
+        .upload-table-wrapper th, .upload-table-wrapper td {
+            padding: 10px 14px;
         }
         
         /* Modal Upload Progress */
@@ -465,7 +503,7 @@
         <div class="header-bar">
             <h2>Daftar Karyawan</h2>
             <div class="header-actions">
-                <button type="button" class="btn-upload" onclick="uploadSelected()">
+                <button type="button" class="btn-upload" onclick="openUploadSelectModal()">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                     Upload Data ke Mesin
                 </button>
@@ -474,23 +512,19 @@
         </div>
 
         <div class="table-responsive">
-            <table>
+            <table id="karyawan-table">
                 <thead>
                     <tr>
-                        <th style="width: 50px; text-align: center;"><input type="checkbox" id="checkAll" onchange="toggleCheckAll()"></th>
-                        <th>ID</th>
-                        <th>Nama</th>
+                        <th class="sortable" onclick="sortTable('id')">ID <span id="sort-icon-id" class="sort-icon">▲</span></th>
+                        <th class="sortable" onclick="sortTable('nama')">Nama <span id="sort-icon-nama" class="sort-icon">⇅</span></th>
                         <th>Jabatan/Bagian</th>
                         <th>Aksi</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="karyawan-tbody">
                     <% if (karyawan.length > 0) { %>
                         <% karyawan.forEach(k => { %>
-                            <tr>
-                                <td style="text-align: center;">
-                                    <input type="checkbox" class="karyawan-checkbox" value="<%= k.uid %>" data-nama="<%= k.nama %>">
-                                </td>
+                            <tr data-id="<%= k.uid %>" data-nama="<%= k.nama %>">
                                 <td><%= k.uid %></td>
                                 <td><strong><%= k.nama %></strong></td>
                                 <td><%= k.jabatan || '-' %></td>
@@ -502,11 +536,58 @@
                         <% }) %>
                     <% } else { %>
                         <tr>
-                            <td colspan="5" style="text-align: center;">Belum ada data karyawan.</td>
+                            <td colspan="4" style="text-align: center;">Belum ada data karyawan.</td>
                         </tr>
                     <% } %>
                 </tbody>
             </table>
+        </div>
+    </div>
+
+    <!-- Modal Popup Pilih Karyawan untuk Upload ke Mesin -->
+    <div id="upload-select-modal" class="modal-overlay" onclick="handleOverlayClick(event)">
+        <div class="modal-card modal-lg">
+            <div class="modal-header">
+                <h3>Pilih Karyawan untuk Diupload</h3>
+                <button type="button" class="btn-close-x" onclick="closeUploadSelectModal()" title="Tutup">&times;</button>
+            </div>
+            <div class="upload-table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 50px; text-align: center;"><input type="checkbox" id="checkAll" onchange="toggleCheckAll()"></th>
+                            <th>ID</th>
+                            <th>Nama</th>
+                            <th>Jabatan/Bagian</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% if (karyawan.length > 0) { %>
+                            <% karyawan.forEach(k => { %>
+                                <tr onclick="toggleRowCheckbox(this, event)" style="cursor: pointer;">
+                                    <td style="text-align: center;">
+                                        <input type="checkbox" class="karyawan-checkbox" value="<%= k.uid %>" data-nama="<%= k.nama %>" onchange="updateCheckAllState()">
+                                    </td>
+                                    <td><%= k.uid %></td>
+                                    <td><strong><%= k.nama %></strong></td>
+                                    <td><%= k.jabatan || '-' %></td>
+                                </tr>
+                            <% }) %>
+                        <% } else { %>
+                            <tr>
+                                <td colspan="4" style="text-align: center;">Belum ada data karyawan.</td>
+                            </tr>
+                        <% } %>
+                    </tbody>
+                </table>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn-cancel" onclick="closeUploadSelectModal()">Batal</button>
+                <button type="button" class="btn-upload" onclick="uploadSelected()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                    Upload Terpilih
+                </button>
+            </div>
         </div>
     </div>
 
@@ -548,6 +629,52 @@
     </div>
 
     <script>
+        let currentSortColumn = 'id';
+        let currentSortOrder = 'asc';
+
+        function sortTable(column) {
+            const tbody = document.getElementById('karyawan-tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr[data-id]'));
+            if (rows.length === 0) return;
+
+            if (currentSortColumn === column) {
+                currentSortOrder = currentSortOrder === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSortColumn = column;
+                currentSortOrder = 'asc';
+            }
+
+            rows.sort((a, b) => {
+                if (column === 'id') {
+                    const idA = a.getAttribute('data-id') || '';
+                    const idB = b.getAttribute('data-id') || '';
+                    const numA = parseInt(idA, 10);
+                    const numB = parseInt(idB, 10);
+                    let cmp = 0;
+                    if (!isNaN(numA) && !isNaN(numB) && String(numA) === idA && String(numB) === idB) {
+                        cmp = numA - numB;
+                    } else {
+                        cmp = idA.localeCompare(idB, undefined, { numeric: true, sensitivity: 'base' });
+                    }
+                    return currentSortOrder === 'asc' ? cmp : -cmp;
+                } else {
+                    const namaA = (a.getAttribute('data-nama') || '').toLowerCase();
+                    const namaB = (b.getAttribute('data-nama') || '').toLowerCase();
+                    const cmp = namaA.localeCompare(namaB, 'id');
+                    return currentSortOrder === 'asc' ? cmp : -cmp;
+                }
+            });
+
+            rows.forEach(row => tbody.appendChild(row));
+
+            document.getElementById('sort-icon-id').innerText = '⇅';
+            document.getElementById('sort-icon-nama').innerText = '⇅';
+            const activeIcon = document.getElementById('sort-icon-' + column);
+            if (activeIcon) {
+                activeIcon.innerText = currentSortOrder === 'asc' ? '▲' : '▼';
+            }
+        }
+
         function openAddModal() {
             const modal = document.getElementById('add-karyawan-modal');
             modal.classList.add('active');
@@ -560,15 +687,28 @@
             modal.classList.remove('active');
         }
 
+        function openUploadSelectModal() {
+            const modal = document.getElementById('upload-select-modal');
+            modal.classList.add('active');
+        }
+
+        function closeUploadSelectModal() {
+            const modal = document.getElementById('upload-select-modal');
+            modal.classList.remove('active');
+        }
+
         function handleOverlayClick(e) {
             if (e.target.id === 'add-karyawan-modal') {
                 closeAddModal();
+            } else if (e.target.id === 'upload-select-modal') {
+                closeUploadSelectModal();
             }
         }
 
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
                 closeAddModal();
+                closeUploadSelectModal();
             }
             if (document.body.classList.contains('upload-locked')) {
                 e.preventDefault();
@@ -580,6 +720,23 @@
             const checkAll = document.getElementById('checkAll');
             const checkboxes = document.querySelectorAll('.karyawan-checkbox');
             checkboxes.forEach(cb => cb.checked = checkAll.checked);
+        }
+
+        function toggleRowCheckbox(row, event) {
+            if (event.target.tagName.toLowerCase() === 'input') return;
+            const cb = row.querySelector('.karyawan-checkbox');
+            if (cb) {
+                cb.checked = !cb.checked;
+                updateCheckAllState();
+            }
+        }
+
+        function updateCheckAllState() {
+            const checkAll = document.getElementById('checkAll');
+            const checkboxes = document.querySelectorAll('.karyawan-checkbox');
+            if (!checkAll || checkboxes.length === 0) return;
+            const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+            checkAll.checked = allChecked;
         }
         
         async function uploadSelected() {
@@ -594,6 +751,8 @@
                 nama: cb.getAttribute('data-nama')
             }));
             
+            closeUploadSelectModal();
+
             // Kunci UI dan tampilkan modal
             document.body.classList.add('upload-locked');
             document.getElementById('upload-overlay').classList.add('active');
@@ -665,7 +824,8 @@
             document.body.classList.remove('upload-locked');
             document.getElementById('upload-overlay').classList.remove('active');
             // Uncheck semua checkbox
-            document.getElementById('checkAll').checked = false;
+            const checkAll = document.getElementById('checkAll');
+            if (checkAll) checkAll.checked = false;
             document.querySelectorAll('.karyawan-checkbox').forEach(cb => cb.checked = false);
         }
     </script>
