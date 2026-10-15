@@ -250,19 +250,21 @@
         th.sortable {
             cursor: pointer;
             user-select: none;
-            transition: background-color 0.2s ease;
         }
         th.sortable:hover {
-            background-color: rgba(255, 255, 255, 0.1);
+            background: transparent;
             color: var(--primary-yellow);
+        }
+        thead tr:hover {
+            background-color: transparent;
         }
         .sort-icon {
             display: inline-block;
             margin-left: 6px;
             font-size: 12px;
         }
-        tr:nth-child(even) { background-color: #f8fafc; }
-        tr:hover { background-color: var(--light-yellow); }
+        tbody tr:nth-child(even) { background-color: #f8fafc; }
+        tbody tr:hover { background-color: var(--light-yellow); }
         .action-links {
             white-space: nowrap;
         }
@@ -594,7 +596,7 @@
                 <thead>
                     <tr>
                         <th class="sortable" onclick="sortTable('id')">ID <span id="sort-icon-id" class="sort-icon">&#9650;</span></th>
-                        <th class="sortable" onclick="sortTable('nama')">Nama <span id="sort-icon-nama" class="sort-icon">&#9660;</span></th>
+                        <th class="sortable" onclick="sortTable('nama')">Nama <span id="sort-icon-nama" class="sort-icon">&#8645;</span></th>
                         <th>Jabatan/Bagian</th>
                         <th>Aksi</th>
                     </tr>
@@ -781,8 +783,8 @@
 
             rows.forEach(row => tbody.appendChild(row));
 
-            document.getElementById('sort-icon-id').innerText = '▼';
-            document.getElementById('sort-icon-nama').innerText = '▼';
+            document.getElementById('sort-icon-id').innerText = '⇅';
+            document.getElementById('sort-icon-nama').innerText = '⇅';
             const activeIcon = document.getElementById('sort-icon-' + column);
             if (activeIcon) {
                 activeIcon.innerText = currentSortOrder === 'asc' ? '▲' : '▼';
