@@ -116,6 +116,7 @@
             display: none;
             justify-content: space-between;
             align-items: center;
+            gap: 10px;
         }
         .alert-banner.show {
             display: flex;
@@ -137,6 +138,7 @@
             font-weight: bold;
             cursor: pointer;
             color: inherit;
+            flex-shrink: 0;
         }
 
         /* Split Panel Layout */
@@ -151,6 +153,7 @@
             display: flex;
             flex-direction: column;
             gap: 24px;
+            min-width: 0;
         }
 
         .panel-card {
@@ -159,6 +162,7 @@
             border-radius: 12px;
             padding: 20px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+            min-width: 0;
         }
 
         .panel-header {
@@ -183,7 +187,9 @@
             box-shadow: 0 2px 6px rgba(13, 71, 161, 0.12);
             display: inline-flex;
             align-items: center;
+            justify-content: center;
             gap: 5px;
+            white-space: nowrap;
         }
         .btn-add:hover {
             background-color: #ffb300;
@@ -203,7 +209,9 @@
             box-shadow: 0 3px 10px rgba(13, 71, 161, 0.2);
             display: inline-flex;
             align-items: center;
+            justify-content: center;
             gap: 8px;
+            white-space: nowrap;
         }
         .btn-save-structure:hover {
             background: var(--primary-yellow);
@@ -216,6 +224,7 @@
             max-height: 290px;
             overflow-y: auto;
             overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
             border-radius: 10px;
             border: 1px solid #e2e8f0;
         }
@@ -267,12 +276,16 @@
             display: inline-flex;
             align-items: center;
             gap: 8px;
+            word-break: break-word;
         }
         .drag-icon {
             color: var(--text-muted);
             font-size: 16px;
             line-height: 1;
             user-select: none;
+            touch-action: none;
+            cursor: grab;
+            padding: 2px 4px;
         }
         .badge-type {
             display: inline-block;
@@ -280,6 +293,7 @@
             border-radius: 12px;
             font-size: 11px;
             font-weight: 700;
+            flex-shrink: 0;
         }
         .badge-company {
             background: var(--light-blue);
@@ -292,6 +306,32 @@
             border: 1px solid #ffe082;
         }
 
+        .action-cell-group {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            flex-wrap: nowrap;
+        }
+        .btn-to-tree {
+            background: var(--light-blue);
+            color: var(--primary-blue);
+            border: 1px solid #90caf9;
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            display: none;
+            align-items: center;
+            gap: 3px;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+        }
+        .btn-to-tree:hover {
+            background: var(--primary-blue);
+            color: var(--white);
+        }
         .btn-del-small {
             background: #fee2e2;
             color: #dc2626;
@@ -304,6 +344,7 @@
             text-decoration: none;
             display: inline-block;
             transition: all 0.15s ease;
+            white-space: nowrap;
         }
         .btn-del-small:hover {
             background: #dc2626;
@@ -315,8 +356,9 @@
             color: var(--text-muted);
             margin: 0 0 10px 0;
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             gap: 6px;
+            line-height: 1.4;
         }
 
         /* Right Panel: Tree Structure */
@@ -324,6 +366,7 @@
             min-height: 620px;
             display: flex;
             flex-direction: column;
+            min-width: 0;
         }
 
         .structure-dropzone {
@@ -335,6 +378,8 @@
             padding: 20px;
             transition: all 0.2s ease;
             overflow-y: auto;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
         }
         .structure-dropzone.drag-over-canvas {
             background: #e3f2fd;
@@ -362,6 +407,7 @@
         .empty-tree-placeholder p {
             margin: 0;
             font-size: 14px;
+            line-height: 1.5;
         }
 
         /* Hierarchy / Tree Styling */
@@ -393,21 +439,26 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 12px;
+            gap: 10px;
         }
         .tree-node-info {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
             font-weight: 700;
+            min-width: 0;
+            flex: 1;
+            flex-wrap: wrap;
         }
         .company-title {
             font-size: 16px;
             color: var(--primary-blue);
+            word-break: break-word;
         }
         .division-title {
             font-size: 14.5px;
             color: var(--text-dark);
+            word-break: break-word;
         }
 
         .btn-remove-node {
@@ -425,6 +476,7 @@
             font-size: 16px;
             line-height: 1;
             transition: all 0.15s ease;
+            flex-shrink: 0;
         }
         .btn-remove-node:hover {
             background: #dc2626;
@@ -476,6 +528,27 @@
             margin-top: 6px;
             padding-top: 6px;
             border-top: 1px dashed #e2e8f0;
+            line-height: 1.4;
+        }
+
+        /* Touch Drag Ghost */
+        .touch-drag-ghost {
+            position: fixed;
+            z-index: 100000;
+            pointer-events: none;
+            background: var(--primary-blue);
+            color: var(--primary-yellow);
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 700;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+            border: 2px solid var(--primary-yellow);
+            transform: translate(-50%, -120%);
+            white-space: nowrap;
+            max-width: 240px;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         /* Modal Popup */
@@ -547,14 +620,18 @@
             font-size: 14px;
             color: var(--primary-blue);
         }
-        .form-group input {
+        .form-group input,
+        .form-group select {
             padding: 11px 14px;
             font-size: 15px;
             border: 1px solid #cbd5e1;
             border-radius: 8px;
             width: 100%;
+            background: var(--white);
+            color: var(--text-dark);
         }
-        .form-group input:focus {
+        .form-group input:focus,
+        .form-group select:focus {
             outline: none;
             border-color: var(--secondary-blue);
             box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.15);
@@ -592,24 +669,157 @@
             background-color: #ffb300;
         }
 
-        @media (max-width: 960px) {
+        /* Optimasi Tampilan Tablet (<= 1024px) */
+        @media (max-width: 1024px) {
+            body {
+                padding: 16px;
+            }
+            .container {
+                padding: 22px 18px;
+            }
             .split-layout {
                 grid-template-columns: 1fr;
+                gap: 20px;
+            }
+            .left-panel {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                gap: 18px;
             }
             .right-panel {
-                min-height: 420px;
+                min-height: 400px;
+            }
+            .structure-dropzone {
+                min-height: 360px;
+            }
+            .btn-to-tree {
+                display: inline-flex;
             }
         }
+
+        /* Optimasi Tampilan HP / Mobile (<= 768px) */
         @media (max-width: 768px) {
-            body { padding: 12px; }
-            .container { padding: 18px 14px; }
+            body {
+                padding: 10px;
+            }
+            .container {
+                padding: 16px 12px;
+                border-radius: 12px;
+            }
+            h1 {
+                font-size: 21px;
+                margin-bottom: 18px;
+            }
+            h2 {
+                font-size: 16px;
+            }
+            .nav {
+                padding: 12px;
+                margin-bottom: 18px;
+            }
+            .nav-links {
+                width: 100%;
+                flex-direction: column;
+                align-items: stretch;
+                gap: 8px;
+            }
+            .nav a {
+                width: 100%;
+                justify-content: center;
+                padding: 10px 14px;
+                font-size: 13.5px;
+            }
+            .left-panel {
+                grid-template-columns: 1fr;
+                gap: 16px;
+            }
+            .panel-card {
+                padding: 14px;
+            }
             .panel-header {
                 flex-direction: column;
                 align-items: stretch;
+                gap: 10px;
             }
             .btn-add, .btn-save-structure {
                 justify-content: center;
                 width: 100%;
+                padding: 10px 14px;
+            }
+            .table-responsive {
+                max-height: 250px;
+            }
+            th, td {
+                padding: 9px 10px;
+                font-size: 13px;
+            }
+            .structure-dropzone {
+                min-height: 300px;
+                padding: 12px;
+            }
+            .empty-tree-placeholder {
+                padding: 40px 12px;
+            }
+            .empty-tree-placeholder svg {
+                width: 44px;
+                height: 44px;
+            }
+            .empty-tree-placeholder h3 {
+                font-size: 16px;
+            }
+            .empty-tree-placeholder p {
+                font-size: 13px;
+            }
+            .tree-company-item {
+                padding: 12px;
+            }
+            .company-title {
+                font-size: 14.5px;
+            }
+            .division-title {
+                font-size: 13.5px;
+            }
+            .tree-children {
+                margin: 10px 0 0 10px;
+                padding: 0 0 0 12px;
+                gap: 8px;
+            }
+            .tree-division-item {
+                padding: 9px 10px;
+            }
+            .tree-division-item::before {
+                left: -14px;
+                width: 12px;
+                top: 18px;
+            }
+            .modal-card {
+                padding: 20px 16px;
+            }
+            .modal-actions {
+                flex-direction: column-reverse;
+            }
+            .modal-actions button {
+                width: 100%;
+            }
+        }
+
+        /* Layar HP Kecil (<= 420px) */
+        @media (max-width: 420px) {
+            th, td {
+                padding: 8px;
+                font-size: 12.5px;
+            }
+            .tree-children {
+                margin-left: 6px;
+                padding-left: 10px;
+            }
+            .tree-division-item::before {
+                left: -11px;
+                width: 9px;
+            }
+            .action-cell-group {
+                flex-direction: column;
+                gap: 4px;
             }
         }
     </style>
@@ -646,15 +856,15 @@
                         <button type="button" class="btn-add" onclick="openModal('modal-perusahaan')">+ Tambah Perusahaan</button>
                     </div>
                     <p class="helper-hint">
-                        <span>&#9776; Tarik (Drag &amp; Drop) baris perusahaan ke panel kanan</span>
+                        <span>&#9776; Tarik (Drag &amp; Drop) atau tekan tombol <strong>+ Struktur</strong> untuk memasukkan perusahaan ke bagan struktur</span>
                     </p>
                     <div class="table-responsive">
                         <table>
                             <thead>
                                 <tr>
-                                    <th style="width: 55px;">No</th>
+                                    <th style="width: 48px;">No</th>
                                     <th>Nama Perusahaan</th>
-                                    <th style="width: 80px; text-align: center;">Aksi</th>
+                                    <th style="width: 110px; text-align: center;">Aksi</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -669,12 +879,15 @@
                                             <td><%= idx + 1 %></td>
                                             <td>
                                                 <div class="drag-handle">
-                                                    <span class="drag-icon">&#9776;</span>
+                                                    <span class="drag-icon" title="Tahan & geser">&#9776;</span>
                                                     <strong><%= p.nama %></strong>
                                                 </div>
                                             </td>
                                             <td style="text-align: center;">
-                                                <a href="/struktur-perusahaan/perusahaan/delete/<%= p.id %>" draggable="false" class="btn-del-small" onclick="return confirm('Hapus perusahaan ini?')">Hapus</a>
+                                                <div class="action-cell-group">
+                                                    <button type="button" class="btn-to-tree" data-id="<%= p.id %>" data-nama="<%= p.nama %>" onclick="quickAddCompanyFromBtn(this)" title="Masukkan ke Struktur">+ Struktur</button>
+                                                    <a href="/struktur-perusahaan/perusahaan/delete/<%= p.id %>" draggable="false" class="btn-del-small" onclick="return confirm('Hapus perusahaan ini?')">Hapus</a>
+                                                </div>
                                             </td>
                                         </tr>
                                     <% }) %>
@@ -695,15 +908,15 @@
                         <button type="button" class="btn-add" onclick="openModal('modal-divisi')">+ Tambah Divisi</button>
                     </div>
                     <p class="helper-hint">
-                        <span>&#9776; Tarik (Drag &amp; Drop) divisi ke bawah perusahaan / divisi di kanan</span>
+                        <span>&#9776; Tarik (Drag &amp; Drop) atau tekan tombol <strong>+ Struktur</strong> untuk menempatkan divisi ke perusahaan/divisi induk</span>
                     </p>
                     <div class="table-responsive">
                         <table>
                             <thead>
                                 <tr>
-                                    <th style="width: 55px;">No</th>
+                                    <th style="width: 48px;">No</th>
                                     <th>Nama Divisi</th>
-                                    <th style="width: 80px; text-align: center;">Aksi</th>
+                                    <th style="width: 110px; text-align: center;">Aksi</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -718,12 +931,15 @@
                                             <td><%= idx + 1 %></td>
                                             <td>
                                                 <div class="drag-handle">
-                                                    <span class="drag-icon">&#9776;</span>
+                                                    <span class="drag-icon" title="Tahan & geser">&#9776;</span>
                                                     <strong><%= d.nama %></strong>
                                                 </div>
                                             </td>
                                             <td style="text-align: center;">
-                                                <a href="/struktur-perusahaan/divisi/delete/<%= d.id %>" draggable="false" class="btn-del-small" onclick="return confirm('Hapus divisi ini?')">Hapus</a>
+                                                <div class="action-cell-group">
+                                                    <button type="button" class="btn-to-tree" data-id="<%= d.id %>" data-nama="<%= d.nama %>" onclick="openAssignDivisionModalFromBtn(this)" title="Masukkan ke Struktur">+ Struktur</button>
+                                                    <a href="/struktur-perusahaan/divisi/delete/<%= d.id %>" draggable="false" class="btn-del-small" onclick="return confirm('Hapus divisi ini?')">Hapus</a>
+                                                </div>
                                             </td>
                                         </tr>
                                     <% }) %>
@@ -761,6 +977,30 @@
                      ondragleave="onCanvasDragLeave(event)"
                      ondrop="onCanvasDrop(event)">
                     <!-- Dirender secara dinamis oleh JavaScript -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Pilih Induk untuk Divisi (Memudahkan di HP & Tablet) -->
+    <div id="modal-assign-divisi" class="modal-overlay" onclick="handleOverlayClick(event, 'modal-assign-divisi')">
+        <div class="modal-card">
+            <div class="modal-header">
+                <span class="modal-title">Tempatkan Divisi ke Struktur</span>
+                <button type="button" class="btn-close-x" onclick="closeModal('modal-assign-divisi')">&times;</button>
+            </div>
+            <div class="modal-form">
+                <div class="form-group">
+                    <label>Divisi yang Dipilih</label>
+                    <input type="text" id="assign-divisi-nama" readonly style="background: #f1f5f9; color: #475569;">
+                </div>
+                <div class="form-group">
+                    <label for="assign-parent-select">Pilih Perusahaan / Divisi Induk</label>
+                    <select id="assign-parent-select"></select>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-cancel" onclick="closeModal('modal-assign-divisi')">Batal</button>
+                    <button type="button" class="btn-submit" onclick="confirmAssignDivision()">Tambahkan</button>
                 </div>
             </div>
         </div>
@@ -810,6 +1050,7 @@
         // Data struktur awal dari database
         let treeData = <%- JSON.stringify(strukturTree || []) %>;
         let draggedPayload = null;
+        let pendingAssignDivision = null;
 
         function genNodeId() {
             return 'node_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
@@ -842,7 +1083,7 @@
             const modal = document.getElementById(id);
             if (!modal) return;
             modal.classList.add('active');
-            const input = modal.querySelector('input');
+            const input = modal.querySelector('input:not([readonly])');
             if (input) setTimeout(() => input.focus(), 50);
         }
 
@@ -853,6 +1094,77 @@
 
         function handleOverlayClick(e, id) {
             if (e.target.id === id) closeModal(id);
+        }
+
+        // Fitur Tambah Cepat untuk Layar Sentuh (HP & Tablet)
+        function quickAddCompanyFromBtn(btn) {
+            const refId = Number(btn.getAttribute('data-id'));
+            const nama = btn.getAttribute('data-nama');
+            const exists = treeData.some(c => Number(c.refId) === refId);
+            if (exists) {
+                showAlert('Perusahaan "' + nama + '" sudah ada di dalam struktur.', 'error');
+                return;
+            }
+            treeData.push({
+                nodeId: genNodeId(),
+                tipe: 'perusahaan',
+                refId: refId,
+                nama: nama,
+                children: []
+            });
+            renderStructure();
+            showAlert('Perusahaan "' + nama + '" ditambahkan ke struktur. Jangan lupa klik Simpan Struktur.', 'success');
+        }
+
+        function openAssignDivisionModalFromBtn(btn) {
+            if (treeData.length === 0) {
+                showAlert('Silakan tambahkan Perusahaan terlebih dahulu ke struktur sebelum menambahkan Divisi.', 'error');
+                return;
+            }
+            const refId = Number(btn.getAttribute('data-id'));
+            const nama = btn.getAttribute('data-nama');
+            pendingAssignDivision = { refId, nama };
+
+            document.getElementById('assign-divisi-nama').value = nama;
+            const selectEl = document.getElementById('assign-parent-select');
+            let optionsHtml = '';
+
+            function buildOptions(nodes, depth = 0) {
+                nodes.forEach(n => {
+                    const prefix = depth > 0 ? '— '.repeat(depth) : '';
+                    const labelType = n.tipe === 'perusahaan' ? '[Perusahaan]' : '[Divisi]';
+                    optionsHtml += `<option value="${escapeHtml(n.nodeId)}">${prefix}${labelType} ${escapeHtml(n.nama)}</option>`;
+                    if (n.children && n.children.length > 0) {
+                        buildOptions(n.children, depth + 1);
+                    }
+                });
+            }
+
+            buildOptions(treeData, 0);
+            selectEl.innerHTML = optionsHtml;
+            openModal('modal-assign-divisi');
+        }
+
+        function confirmAssignDivision() {
+            if (!pendingAssignDivision) return;
+            const selectEl = document.getElementById('assign-parent-select');
+            const targetNodeId = selectEl ? selectEl.value : '';
+            const targetNode = findNodeById(treeData, targetNodeId);
+            if (!targetNode) {
+                showAlert('Pilih induk tujuan terlebih dahulu.', 'error');
+                return;
+            }
+            targetNode.children = targetNode.children || [];
+            targetNode.children.push({
+                nodeId: genNodeId(),
+                tipe: 'divisi',
+                refId: Number(pendingAssignDivision.refId),
+                nama: pendingAssignDivision.nama,
+                children: []
+            });
+            closeModal('modal-assign-divisi');
+            renderStructure();
+            pendingAssignDivision = null;
         }
 
         function getActivePayload(event) {
@@ -931,22 +1243,12 @@
             }
         }
 
-        function onCanvasDrop(event) {
-            event.preventDefault();
-            event.stopPropagation();
-            const canvas = document.getElementById('structure-canvas');
-            if (canvas) canvas.classList.remove('drag-over-canvas');
-            document.querySelectorAll('.drag-over-target').forEach(el => el.classList.remove('drag-over-target'));
-
-            const payload = getActivePayload(event);
+        function applyDropToCanvas(payload) {
             if (!payload) return;
-
             if (payload.tipe === 'perusahaan') {
-                // Cek apakah perusahaan sudah ada di struktur root
                 const exists = treeData.some(c => Number(c.refId) === Number(payload.refId));
                 if (exists) {
                     showAlert('Perusahaan "' + payload.nama + '" sudah ada di dalam struktur kanan.', 'error');
-                    draggedPayload = null;
                     return;
                 }
                 treeData.push({
@@ -961,7 +1263,6 @@
                 if (treeData.length === 0) {
                     showAlert('Silakan tarik Perusahaan terlebih dahulu ke panel kanan sebelum menambahkan Divisi.', 'error');
                 } else if (treeData.length === 1 && !payload.existingNodeId) {
-                    // Jika hanya ada 1 perusahaan di struktur, otomatis masukkan ke perusahaan tersebut
                     treeData[0].children = treeData[0].children || [];
                     treeData[0].children.push({
                         nodeId: genNodeId(),
@@ -975,6 +1276,17 @@
                     showAlert('Arahkan dan lepaskan Divisi tepat di atas kotak Perusahaan atau Divisi induknya.', 'error');
                 }
             }
+        }
+
+        function onCanvasDrop(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            const canvas = document.getElementById('structure-canvas');
+            if (canvas) canvas.classList.remove('drag-over-canvas');
+            document.querySelectorAll('.drag-over-target').forEach(el => el.classList.remove('drag-over-target'));
+
+            const payload = getActivePayload(event);
+            applyDropToCanvas(payload);
             draggedPayload = null;
         }
 
@@ -990,7 +1302,6 @@
         function onNodeDragOver(event, targetNodeId) {
             event.preventDefault();
             const payload = getActivePayload(event);
-            // Jika yang ditarik adalah perusahaan, biarkan bubbling ke canvas utama
             if (payload && payload.tipe === 'perusahaan') {
                 return;
             }
@@ -1008,12 +1319,48 @@
             }
         }
 
+        function applyDropToNode(payload, targetNodeId) {
+            if (!payload) return;
+            if (payload.tipe === 'perusahaan') {
+                applyDropToCanvas(payload);
+                return;
+            }
+            if (payload.tipe !== 'divisi') return;
+
+            const targetNode = findNodeById(treeData, targetNodeId);
+            if (!targetNode) return;
+
+            if (payload.existingNodeId) {
+                if (payload.existingNodeId === targetNodeId) return;
+                const movingNode = findNodeById(treeData, payload.existingNodeId);
+                if (!movingNode) return;
+                if (isDescendant(movingNode, targetNodeId)) {
+                    showAlert('Tidak dapat memindahkan divisi induk ke dalam sub-divisinya sendiri.', 'error');
+                    return;
+                }
+                removeNodeById(treeData, payload.existingNodeId);
+                targetNode.children = targetNode.children || [];
+                targetNode.children.push(movingNode);
+                renderStructure();
+                return;
+            }
+
+            targetNode.children = targetNode.children || [];
+            targetNode.children.push({
+                nodeId: genNodeId(),
+                tipe: 'divisi',
+                refId: Number(payload.refId),
+                nama: payload.nama,
+                children: []
+            });
+            renderStructure();
+        }
+
         function onNodeDrop(event, targetNodeId) {
             event.preventDefault();
             const payload = getActivePayload(event);
             if (!payload) return;
 
-            // Jika perusahaan dilepas di atas kotak perusahaan lain, arahkan ke canvas utama
             if (payload.tipe === 'perusahaan') {
                 onCanvasDrop(event);
                 return;
@@ -1024,40 +1371,94 @@
             const canvas = document.getElementById('structure-canvas');
             if (canvas) canvas.classList.remove('drag-over-canvas');
 
-            if (payload.tipe !== 'divisi') return;
-
-            const targetNode = findNodeById(treeData, targetNodeId);
-            if (!targetNode) return;
-
-            // Jika memindahkan node divisi yang sudah ada di dalam tree
-            if (payload.existingNodeId) {
-                if (payload.existingNodeId === targetNodeId) return;
-                const movingNode = findNodeById(treeData, payload.existingNodeId);
-                if (!movingNode) return;
-                // Cegah drop induk ke dalam anaknya sendiri
-                if (isDescendant(movingNode, targetNodeId)) {
-                    showAlert('Tidak dapat memindahkan divisi induk ke dalam sub-divisinya sendiri.', 'error');
-                    return;
-                }
-                removeNodeById(treeData, payload.existingNodeId);
-                targetNode.children = targetNode.children || [];
-                targetNode.children.push(movingNode);
-                renderStructure();
-                draggedPayload = null;
-                return;
-            }
-
-            // Tambah divisi baru di bawah targetNode (Perusahaan atau Divisi induk)
-            targetNode.children = targetNode.children || [];
-            targetNode.children.push({
-                nodeId: genNodeId(),
-                tipe: 'divisi',
-                refId: Number(payload.refId),
-                nama: payload.nama,
-                children: []
-            });
-            renderStructure();
+            applyDropToNode(payload, targetNodeId);
             draggedPayload = null;
+        }
+
+        // Dukungan Touch Drag & Drop untuk HP dan Tablet
+        let touchGhostEl = null;
+
+        function initTouchDragAndDrop() {
+            document.addEventListener('touchstart', function(e) {
+                const handle = e.target.closest('.drag-icon');
+                if (!handle) return;
+                const draggableEl = handle.closest('[data-tipe]');
+                if (!draggableEl) return;
+
+                const touch = e.touches[0];
+                if (!touch) return;
+
+                e.preventDefault();
+                draggedPayload = {
+                    tipe: draggableEl.getAttribute('data-tipe'),
+                    refId: Number(draggableEl.getAttribute('data-ref-id')),
+                    nama: draggableEl.getAttribute('data-nama'),
+                    existingNodeId: draggableEl.getAttribute('data-node-id') || null
+                };
+
+                draggableEl.classList.add('dragging');
+                touchGhostEl = document.createElement('div');
+                touchGhostEl.className = 'touch-drag-ghost';
+                touchGhostEl.innerText = draggedPayload.nama;
+                touchGhostEl.style.left = touch.clientX + 'px';
+                touchGhostEl.style.top = touch.clientY + 'px';
+                document.body.appendChild(touchGhostEl);
+            }, { passive: false });
+
+            document.addEventListener('touchmove', function(e) {
+                if (!draggedPayload || !touchGhostEl) return;
+                const touch = e.touches[0];
+                if (!touch) return;
+
+                e.preventDefault();
+                touchGhostEl.style.left = touch.clientX + 'px';
+                touchGhostEl.style.top = touch.clientY + 'px';
+
+                document.querySelectorAll('.drag-over-target, .drag-over-canvas').forEach(el => {
+                    el.classList.remove('drag-over-target', 'drag-over-canvas');
+                });
+
+                const targetEl = document.elementFromPoint(touch.clientX, touch.clientY);
+                if (!targetEl) return;
+
+                const nodeEl = targetEl.closest('[data-drop-node-id]');
+                const canvasEl = targetEl.closest('#structure-canvas');
+
+                if (nodeEl && draggedPayload.tipe === 'divisi') {
+                    nodeEl.classList.add('drag-over-target');
+                } else if (canvasEl) {
+                    canvasEl.classList.add('drag-over-canvas');
+                }
+            }, { passive: false });
+
+            document.addEventListener('touchend', function(e) {
+                if (!draggedPayload) return;
+                const touch = e.changedTouches[0];
+
+                if (touchGhostEl) {
+                    touchGhostEl.remove();
+                    touchGhostEl = null;
+                }
+
+                document.querySelectorAll('.dragging, .drag-over-target, .drag-over-canvas').forEach(el => {
+                    el.classList.remove('dragging', 'drag-over-target', 'drag-over-canvas');
+                });
+
+                if (touch) {
+                    const targetEl = document.elementFromPoint(touch.clientX, touch.clientY);
+                    if (targetEl) {
+                        const nodeEl = targetEl.closest('[data-drop-node-id]');
+                        const canvasEl = targetEl.closest('#structure-canvas');
+                        if (nodeEl && draggedPayload.tipe === 'divisi') {
+                            applyDropToNode(draggedPayload, nodeEl.getAttribute('data-drop-node-id'));
+                        } else if (canvasEl) {
+                            applyDropToCanvas(draggedPayload);
+                        }
+                    }
+                }
+
+                draggedPayload = null;
+            });
         }
 
         function findNodeById(nodes, nodeId) {
@@ -1110,6 +1511,7 @@
                         data-ref-id="${div.refId}"
                         data-nama="${safeNama}"
                         data-node-id="${div.nodeId}"
+                        data-drop-node-id="${div.nodeId}"
                         ondragstart="onDragStartRow(event)"
                         ondragend="onDragEndItem(event)"
                         ondragenter="onNodeDragEnter(event, '${div.nodeId}')"
@@ -1118,7 +1520,7 @@
                         ondrop="onNodeDrop(event, '${div.nodeId}')">
                         <div class="tree-node-card">
                             <div class="tree-node-info">
-                                <span class="drag-icon">&#9776;</span>
+                                <span class="drag-icon" title="Tahan & geser">&#9776;</span>
                                 <span class="badge-type badge-division">Divisi</span>
                                 <span class="division-title">${safeNama}</span>
                             </div>
@@ -1143,7 +1545,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                         </svg>
                         <h3>Struktur Perusahaan Masih Kosong</h3>
-                        <p>Tarik (Drag &amp; Drop) <strong>Perusahaan</strong> dari tabel di sebelah kiri ke area ini,<br>kemudian tarik <strong>Divisi</strong> ke bawah Perusahaan secara bertingkat.</p>
+                        <p>Tarik (Drag &amp; Drop) atau tekan tombol <strong>+ Struktur</strong> pada <strong>Perusahaan</strong> terlebih dahulu, kemudian tambahkan <strong>Divisi</strong> di bawahnya secara bertingkat.</p>
                     </div>
                 `;
                 return;
@@ -1154,6 +1556,7 @@
                 const safeNama = escapeHtml(comp.nama);
                 html += `
                     <li class="tree-company-item"
+                        data-drop-node-id="${comp.nodeId}"
                         ondragenter="onNodeDragEnter(event, '${comp.nodeId}')"
                         ondragover="onNodeDragOver(event, '${comp.nodeId}')"
                         ondragleave="onNodeDragLeave(event)"
@@ -1200,8 +1603,9 @@
             }
         }
 
-        // Inisialisasi tampilan struktur saat halaman dimuat
+        // Inisialisasi tampilan struktur & touch drag saat halaman dimuat
         renderStructure();
+        initTouchDragAndDrop();
     </script>
 </body>
 </html>
