@@ -21,14 +21,15 @@
             margin: 0;
             padding: 24px;
             background: linear-gradient(135deg, #e3f2fd 0%, #fff8e1 100%);
-            min-height: 100vh;
+            min-height: 115vh;
             color: var(--text-dark);
         }
         .container {
-            max-width: 1050px;
+            max-width: 1120px;
+            min-height: 1060px;
             margin: auto;
             background: var(--white);
-            padding: 28px;
+            padding: 28px 28px 48px 28px;
             border-radius: 16px;
             box-shadow: 0 10px 30px rgba(13, 71, 161, 0.1);
             border-top: 6px solid var(--primary-yellow);
@@ -57,7 +58,8 @@
             text-align: left;
             border-left: 5px solid var(--primary-yellow);
             padding-left: 12px;
-            margin-bottom: 0;
+            margin: 0;
+            white-space: nowrap;
         }
         .nav {
             margin-bottom: 24px;
@@ -109,14 +111,16 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
             gap: 12px;
             margin-bottom: 16px;
+            width: 100%;
         }
         .header-title-group {
             display: flex;
+            justify-content: flex-start;
             align-items: center;
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
             gap: 14px;
         }
         .filter-perusahaan-select {
@@ -129,7 +133,7 @@
             border-radius: 8px;
             cursor: pointer;
             outline: none;
-            min-width: 210px;
+            min-width: 190px;
             transition: all 0.2s ease;
         }
         .filter-perusahaan-select:focus {
@@ -139,24 +143,28 @@
         
         .header-actions {
             display: flex;
-            flex-wrap: wrap;
+            justify-content: flex-end;
+            align-items: center;
+            flex-wrap: nowrap;
             gap: 10px;
+            margin-left: auto;
         }
 
         .btn-open-modal {
-            padding: 10px 20px;
+            padding: 10px 16px;
             background-color: var(--primary-yellow);
             color: var(--primary-blue);
             cursor: pointer;
             border: none;
             font-weight: 700;
             border-radius: 8px;
-            font-size: 15px;
+            font-size: 14px;
             transition: all 0.2s ease;
             box-shadow: 0 3px 8px rgba(13, 71, 161, 0.15);
             display: inline-flex;
             align-items: center;
             gap: 6px;
+            white-space: nowrap;
         }
         .btn-open-modal:hover {
             background-color: #ffb300;
@@ -164,19 +172,20 @@
         }
         
         .btn-upload {
-            padding: 10px 20px;
+            padding: 10px 16px;
             background-color: var(--secondary-blue);
             color: var(--white);
             cursor: pointer;
             border: none;
             font-weight: 700;
             border-radius: 8px;
-            font-size: 15px;
+            font-size: 14px;
             transition: all 0.2s ease;
             box-shadow: 0 3px 8px rgba(13, 71, 161, 0.15);
             display: inline-flex;
             align-items: center;
             gap: 6px;
+            white-space: nowrap;
         }
         .btn-upload:hover {
             background-color: var(--primary-blue);
@@ -184,19 +193,20 @@
         }
 
         .btn-export {
-            padding: 10px 20px;
+            padding: 10px 16px;
             background-color: #16a34a;
             color: var(--white);
             cursor: pointer;
             border: none;
             font-weight: 700;
             border-radius: 8px;
-            font-size: 15px;
+            font-size: 14px;
             transition: all 0.2s ease;
             box-shadow: 0 3px 8px rgba(22, 163, 74, 0.2);
             display: inline-flex;
             align-items: center;
             gap: 6px;
+            white-space: nowrap;
         }
         .btn-export:hover {
             background-color: #15803d;
@@ -241,7 +251,8 @@
 
         .table-responsive {
             width: 100%;
-            max-height: 480px;
+            min-height: 600px;
+            max-height: 700px;
             overflow-y: auto;
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
@@ -547,12 +558,23 @@
         .btn-close-upload:hover { background-color: var(--secondary-blue); }
 
         /* Media Queries untuk Mobile & Tablet */
+        @media (max-width: 960px) {
+            .header-bar {
+                flex-wrap: wrap;
+            }
+            .header-title-group {
+                flex-wrap: wrap;
+            }
+            .header-actions {
+                flex-wrap: wrap;
+            }
+        }
         @media (max-width: 768px) {
             body {
                 padding: 12px;
             }
             .container {
-                padding: 18px 14px;
+                padding: 18px 14px 32px 14px;
                 border-radius: 12px;
             }
             h1 {
@@ -572,6 +594,7 @@
             }
             .header-actions {
                 flex-direction: column;
+                margin-left: 0;
             }
             .btn-open-modal, .btn-upload, .btn-export {
                 width: 100%;
