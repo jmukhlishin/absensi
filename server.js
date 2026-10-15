@@ -5,6 +5,7 @@ const path = require('path');
 const moment = require('moment');
 const crypto = require('crypto');
 const ZKLib = require('node-zklib');
+const XLSX = require('xlsx');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -116,9 +117,10 @@ const db = new sqlite3.Database(dbPath, (err) => {
                 FOREIGN KEY (uid) REFERENCES karyawan(uid)
             )`);
 
-            // Index untuk mempercepat query dashboard dan pengecekan sync incremental
+            // Index untuk mempercepat query dashboard, pengecekan sync incremental, dan ekspor data
             db.run(`CREATE INDEX IF NOT EXISTS idx_absensi_waktu ON absensi(waktu DESC)`);
             db.run(`CREATE INDEX IF NOT EXISTS idx_absensi_uid_waktu ON absensi(uid, waktu)`);
+            db.run(`CREATE INDEX IF NOT EXISTS idx_karyawan_nama ON karyawan(nama)`);
         });
     }
 });
@@ -662,6 +664,134 @@ app.get('/karyawan/delete/:uid', (req, res) => {
     });
 });
 
+// Ekspor Data Karyawan / Beserta Absensi ke Excel (.xlsx)
+app.get('/karyawan/export', async (req, res) => {
+    try {
+        const type = req.query.type || 'karyawan';
+        const workbook = XLSX.utils.book_new();
+
+        const karyawanRows = await dbAll(
+            `SELECT uid, nama, COALESCE(jabatan, '') as jabatan FROM karyawan ORDER BY CAST(uid AS INTEGER) ASC, uid ASC`
+        );
+
+        const dataKaryawanExcel = karyawanRows.map((k, idx) => ({
+            'No': idx + 1,
+            'ID Karyawan': k.uid,
+            'Nama Karyawan': k.nama,
+            'Jabatan / Bagian': k.jabatan || '-'
+        }));
+
+        const wsKaryawan = XLSX.utils.json_to_sheet(
+            dataKaryawanExcel.length > 0
+                ? dataKaryawanExcel
+                : [{ 'No': '', 'ID Karyawan': '', 'Nama Karyawan': '', 'Jabatan / Bagian': '' }]
+        );
+        wsKaryawan['!cols'] = [{ wch: 6 }, { wch: 15 }, { wch: 30 }, { wch: 25 }];
+        XLSX.utils.book_append_sheet(workbook, wsKaryawan, 'Data Karyawan');
+
+        let filename = `Data_Karyawan_${moment().format('YYYYMMDD_HHmmss')}.xlsx`;
+
+        if (type === 'karyawan_absensi') {
+            const absensiSql = `
+                ${FILTERED_ABSENSI_CTE}
+                SELECT 
+                    a.id,
+                    a.uid,
+                    COALESCE(k.nama, 'User ' || a.uid) as nama,
+                    COALESCE(k.jabatan, '') as jabatan,
+                    date(a.waktu) as tanggal,
+                    time(a.waktu) as jam,
+                    a.waktu,
+                    a.status
+                FROM ValidAbsensi a
+                LEFT JOIN karyawan k ON a.uid = k.uid
+                ORDER BY a.waktu DESC, a.id DESC
+            `;
+            const absensiRows = await dbAll(absensiSql);
+
+            const dataAbsensiExcel = absensiRows.map((a, idx) => ({
+                'No': idx + 1,
+                'ID Karyawan': a.uid,
+                'Nama Karyawan': a.nama,
+                'Jabatan / Bagian': a.jabatan || '-',
+                'Tanggal': a.tanggal,
+                'Jam': a.jam,
+                'Waktu Lengkap': a.waktu,
+                'Status': a.status
+            }));
+
+            const wsAbsensi = XLSX.utils.json_to_sheet(
+                dataAbsensiExcel.length > 0
+                    ? dataAbsensiExcel
+                    : [{ 'No': '', 'ID Karyawan': '', 'Nama Karyawan': '', 'Jabatan / Bagian': '', 'Tanggal': '', 'Jam': '', 'Waktu Lengkap': '', 'Status': '' }]
+            );
+            wsAbsensi['!cols'] = [
+                { wch: 6 },
+                { wch: 15 },
+                { wch: 30 },
+                { wch: 25 },
+                { wch: 15 },
+                { wch: 12 },
+                { wch: 22 },
+                { wch: 12 }
+            ];
+            XLSX.utils.book_append_sheet(workbook, wsAbsensi, 'Data Absensi');
+
+            const rekapSql = `
+                ${FILTERED_ABSENSI_CTE}
+                SELECT 
+                    k.uid,
+                    k.nama,
+                    COALESCE(k.jabatan, '') as jabatan,
+                    date(a.waktu) as tanggal,
+                    MIN(CASE WHEN a.status = 'Masuk' THEN time(a.waktu) END) as jam_masuk,
+                    MAX(CASE WHEN a.status = 'Pulang' THEN time(a.waktu) END) as jam_pulang
+                FROM karyawan k
+                LEFT JOIN ValidAbsensi a ON k.uid = a.uid
+                GROUP BY k.uid, k.nama, k.jabatan, date(a.waktu)
+                ORDER BY CAST(k.uid AS INTEGER) ASC, k.uid ASC, tanggal DESC
+            `;
+            const rekapRows = await dbAll(rekapSql);
+
+            const dataRekapExcel = rekapRows.map((r, idx) => ({
+                'No': idx + 1,
+                'ID Karyawan': r.uid,
+                'Nama Karyawan': r.nama,
+                'Jabatan / Bagian': r.jabatan || '-',
+                'Tanggal': r.tanggal || '-',
+                'Jam Masuk': r.jam_masuk || '-',
+                'Jam Pulang': r.jam_pulang || '-'
+            }));
+
+            const wsRekap = XLSX.utils.json_to_sheet(
+                dataRekapExcel.length > 0
+                    ? dataRekapExcel
+                    : [{ 'No': '', 'ID Karyawan': '', 'Nama Karyawan': '', 'Jabatan / Bagian': '', 'Tanggal': '', 'Jam Masuk': '', 'Jam Pulang': '' }]
+            );
+            wsRekap['!cols'] = [
+                { wch: 6 },
+                { wch: 15 },
+                { wch: 30 },
+                { wch: 25 },
+                { wch: 15 },
+                { wch: 15 },
+                { wch: 15 }
+            ];
+            XLSX.utils.book_append_sheet(workbook, wsRekap, 'Rekap Karyawan & Absensi');
+
+            filename = `Data_Karyawan_dan_Absensi_${moment().format('YYYYMMDD_HHmmss')}.xlsx`;
+        }
+
+        const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(buffer);
+    } catch (err) {
+        console.error('Gagal ekspor data karyawan:', err);
+        res.status(500).send('Gagal mengekspor data ke Excel.');
+    }
+});
+
 // Endpoint Upload Karyawan ke Mesin (ZKTeco)
 app.post('/api/upload-karyawan', async (req, res) => {
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
@@ -680,26 +810,57 @@ app.post('/api/upload-karyawan', async (req, res) => {
         const zkInstance = new ZKLib(config.ip, config.port, 10000, 4000);
         
         await zkInstance.createSocket();
-        res.write(JSON.stringify({ status: 'running', progress: 30, message: 'Koneksi ke mesin berhasil.' }) + '\n');
+        res.write(JSON.stringify({ status: 'running', progress: 20, message: 'Koneksi berhasil. Memeriksa data karyawan di mesin...' }) + '\n');
+
+        // Ambil daftar user yang sudah ada di mesin untuk mengecek nama yang sama
+        const existingMachineNames = new Set();
+        try {
+            const machineUsers = await zkInstance.getUsers();
+            const machineUserList = (machineUsers && Array.isArray(machineUsers.data)) ? machineUsers.data : [];
+            for (const mu of machineUserList) {
+                if (mu && mu.name) {
+                    const normName = String(mu.name).trim().toLowerCase();
+                    if (normName) existingMachineNames.add(normName);
+                }
+            }
+        } catch (getUsersErr) {
+            console.error('Gagal membaca daftar user dari mesin sebelum upload:', getUsersErr);
+        }
+
+        res.write(JSON.stringify({ status: 'running', progress: 30, message: 'Memulai proses upload data karyawan baru...' }) + '\n');
 
         const total = users.length;
         let successCount = 0;
+        let skippedCount = 0;
 
         for (let i = 0; i < total; i++) {
             const u = users[i];
+            const cleanName = String(u.nama || '').trim();
+            const normName = cleanName.toLowerCase();
+
+            const pct = 30 + Math.floor(((i + 1) / total) * 60);
+
+            // Jika nama sudah ada di mesin, skip dan lanjutkan ke data nama yang baru
+            if (normName && existingMachineNames.has(normName)) {
+                skippedCount++;
+                res.write(JSON.stringify({ status: 'running', progress: pct, message: `Melewati ${cleanName} (nama sudah ada di mesin) (${i+1}/${total})...` }) + '\n');
+                await yieldEventLoop();
+                continue;
+            }
+
             try {
                 // Konversi uid ke int, fallback jika bukan angka murni, pastikan userid tetap string
                 let uidInt = parseInt(u.uid, 10);
                 if (isNaN(uidInt)) uidInt = Math.floor(Math.random() * 10000); // Darurat bila uid string bukan angka
                 
-                await zkInstance.setUser(uidInt, u.uid, u.nama, '', 0, 0);
+                await zkInstance.setUser(uidInt, u.uid, cleanName, '', 0, 0);
                 successCount++;
+                if (normName) existingMachineNames.add(normName);
             } catch (e) {
-                console.error(`Gagal upload user ${u.nama} (${u.uid}):`, e);
+                console.error(`Gagal upload user ${cleanName} (${u.uid}):`, e);
             }
             
-            const pct = 30 + Math.floor(((i + 1) / total) * 60);
-            res.write(JSON.stringify({ status: 'running', progress: pct, message: `Mengupload ${u.nama} (${i+1}/${total})...` }) + '\n');
+            res.write(JSON.stringify({ status: 'running', progress: pct, message: `Mengupload ${cleanName} (${i+1}/${total})...` }) + '\n');
             await yieldEventLoop();
         }
 
@@ -707,7 +868,11 @@ app.post('/api/upload-karyawan', async (req, res) => {
             await zkInstance.disconnect();
         } catch (_) {}
 
-        res.write(JSON.stringify({ status: 'completed', progress: 100, message: `Selesai! Berhasil mengupload ${successCount} dari ${total} data ke mesin.` }) + '\n');
+        const doneMsg = skippedCount > 0
+            ? `Selesai! Berhasil mengupload ${successCount} data baru ke mesin (${skippedCount} nama yang sama dilewati).`
+            : `Selesai! Berhasil mengupload ${successCount} dari ${total} data ke mesin.`;
+
+        res.write(JSON.stringify({ status: 'completed', progress: 100, message: doneMsg }) + '\n');
         res.end();
     } catch (err) {
         console.error('Error upload karyawan:', err);
