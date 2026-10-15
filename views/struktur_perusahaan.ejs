@@ -249,6 +249,8 @@
         }
         tbody tr.draggable-row {
             cursor: grab;
+            user-select: none;
+            -webkit-user-drag: element;
         }
         tbody tr.draggable-row:hover {
             background-color: var(--light-yellow);
@@ -344,6 +346,7 @@
             text-align: center;
             padding: 80px 20px;
             color: var(--text-muted);
+            pointer-events: none;
         }
         .empty-tree-placeholder svg {
             width: 56px;
@@ -448,6 +451,8 @@
             padding: 11px 14px;
             transition: all 0.2s ease;
             cursor: grab;
+            user-select: none;
+            -webkit-user-drag: element;
         }
         .tree-division-item::before {
             content: '';
@@ -656,7 +661,10 @@
                                 <% if (perusahaanList && perusahaanList.length > 0) { %>
                                     <% perusahaanList.forEach((p, idx) => { %>
                                         <tr class="draggable-row" draggable="true"
-                                            ondragstart="onDragStartItem(event, 'perusahaan', '<%= p.id %>', <%- JSON.stringify(p.nama) %>)"
+                                            data-tipe="perusahaan"
+                                            data-ref-id="<%= p.id %>"
+                                            data-nama="<%= p.nama %>"
+                                            ondragstart="onDragStartRow(event)"
                                             ondragend="onDragEndItem(event)">
                                             <td><%= idx + 1 %></td>
                                             <td>
@@ -666,7 +674,7 @@
                                                 </div>
                                             </td>
                                             <td style="text-align: center;">
-                                                <a href="/struktur-perusahaan/perusahaan/delete/<%= p.id %>" class="btn-del-small" onclick="return confirm('Hapus perusahaan ini?')">Hapus</a>
+                                                <a href="/struktur-perusahaan/perusahaan/delete/<%= p.id %>" draggable="false" class="btn-del-small" onclick="return confirm('Hapus perusahaan ini?')">Hapus</a>
                                             </td>
                                         </tr>
                                     <% }) %>
@@ -702,7 +710,10 @@
                                 <% if (divisiList && divisiList.length > 0) { %>
                                     <% divisiList.forEach((d, idx) => { %>
                                         <tr class="draggable-row" draggable="true"
-                                            ondragstart="onDragStartItem(event, 'divisi', '<%= d.id %>', <%- JSON.stringify(d.nama) %>)"
+                                            data-tipe="divisi"
+                                            data-ref-id="<%= d.id %>"
+                                            data-nama="<%= d.nama %>"
+                                            ondragstart="onDragStartRow(event)"
                                             ondragend="onDragEndItem(event)">
                                             <td><%= idx + 1 %></td>
                                             <td>
@@ -712,7 +723,7 @@
                                                 </div>
                                             </td>
                                             <td style="text-align: center;">
-                                                <a href="/struktur-perusahaan/divisi/delete/<%= d.id %>" class="btn-del-small" onclick="return confirm('Hapus divisi ini?')">Hapus</a>
+                                                <a href="/struktur-perusahaan/divisi/delete/<%= d.id %>" draggable="false" class="btn-del-small" onclick="return confirm('Hapus divisi ini?')">Hapus</a>
                                             </td>
                                         </tr>
                                     <% }) %>
@@ -745,6 +756,7 @@
                 </p>
 
                 <div id="structure-canvas" class="structure-dropzone"
+                     ondragenter="onCanvasDragEnter(event)"
                      ondragover="onCanvasDragOver(event)"
                      ondragleave="onCanvasDragLeave(event)"
                      ondrop="onCanvasDrop(event)">
@@ -843,7 +855,28 @@
             if (e.target.id === id) closeModal(id);
         }
 
+        function getActivePayload(event) {
+            if (draggedPayload) return draggedPayload;
+            if (event && event.dataTransfer) {
+                try {
+                    const raw = event.dataTransfer.getData('text/plain');
+                    if (raw) return JSON.parse(raw);
+                } catch (e) {}
+            }
+            return null;
+        }
+
         // Drag & Drop Handlers dari Tabel Kiri maupun dari Tree Kanan
+        function onDragStartRow(event) {
+            const el = event.currentTarget;
+            if (!el) return;
+            const tipe = el.getAttribute('data-tipe');
+            const refId = el.getAttribute('data-ref-id');
+            const nama = el.getAttribute('data-nama');
+            const existingNodeId = el.getAttribute('data-node-id') || null;
+            onDragStartItem(event, tipe, refId, nama, existingNodeId);
+        }
+
         function onDragStartItem(event, tipe, refId, nama, existingNodeId = null) {
             event.stopPropagation();
             draggedPayload = {
@@ -852,8 +885,12 @@
                 nama: nama,
                 existingNodeId: existingNodeId
             };
-            event.dataTransfer.effectAllowed = 'copyMove';
-            event.dataTransfer.setData('text/plain', JSON.stringify(draggedPayload));
+            if (event.dataTransfer) {
+                event.dataTransfer.effectAllowed = 'all';
+                try {
+                    event.dataTransfer.setData('text/plain', JSON.stringify(draggedPayload));
+                } catch (e) {}
+            }
             if (event.currentTarget && event.currentTarget.classList) {
                 event.currentTarget.classList.add('dragging');
             }
@@ -866,33 +903,42 @@
             document.querySelectorAll('.drag-over-target, .drag-over-canvas').forEach(el => {
                 el.classList.remove('drag-over-target', 'drag-over-canvas');
             });
+            draggedPayload = null;
         }
 
-        // Dropzone Area Utama (Untuk Perusahaan)
+        // Dropzone Area Utama (Untuk Perusahaan & Fallback Divisi)
+        function onCanvasDragEnter(event) {
+            event.preventDefault();
+            const canvas = document.getElementById('structure-canvas');
+            if (canvas) canvas.classList.add('drag-over-canvas');
+        }
+
         function onCanvasDragOver(event) {
             event.preventDefault();
-            if (draggedPayload && draggedPayload.tipe === 'perusahaan') {
-                event.currentTarget.classList.add('drag-over-canvas');
-                event.dataTransfer.dropEffect = 'copy';
+            if (event.dataTransfer) {
+                event.dataTransfer.dropEffect = (draggedPayload && draggedPayload.existingNodeId) ? 'move' : 'copy';
+            }
+            const canvas = document.getElementById('structure-canvas');
+            if (canvas && !canvas.classList.contains('drag-over-canvas')) {
+                canvas.classList.add('drag-over-canvas');
             }
         }
 
         function onCanvasDragLeave(event) {
-            if (event.target === event.currentTarget) {
-                event.currentTarget.classList.remove('drag-over-canvas');
+            const canvas = document.getElementById('structure-canvas');
+            if (canvas && (!event.relatedTarget || !canvas.contains(event.relatedTarget))) {
+                canvas.classList.remove('drag-over-canvas');
             }
         }
 
         function onCanvasDrop(event) {
             event.preventDefault();
-            event.currentTarget.classList.remove('drag-over-canvas');
+            event.stopPropagation();
+            const canvas = document.getElementById('structure-canvas');
+            if (canvas) canvas.classList.remove('drag-over-canvas');
+            document.querySelectorAll('.drag-over-target').forEach(el => el.classList.remove('drag-over-target'));
 
-            let payload = draggedPayload;
-            if (!payload) {
-                try {
-                    payload = JSON.parse(event.dataTransfer.getData('text/plain'));
-                } catch (e) {}
-            }
+            const payload = getActivePayload(event);
             if (!payload) return;
 
             if (payload.tipe === 'perusahaan') {
@@ -900,6 +946,7 @@
                 const exists = treeData.some(c => Number(c.refId) === Number(payload.refId));
                 if (exists) {
                     showAlert('Perusahaan "' + payload.nama + '" sudah ada di dalam struktur kanan.', 'error');
+                    draggedPayload = null;
                     return;
                 }
                 treeData.push({
@@ -913,6 +960,17 @@
             } else if (payload.tipe === 'divisi') {
                 if (treeData.length === 0) {
                     showAlert('Silakan tarik Perusahaan terlebih dahulu ke panel kanan sebelum menambahkan Divisi.', 'error');
+                } else if (treeData.length === 1 && !payload.existingNodeId) {
+                    // Jika hanya ada 1 perusahaan di struktur, otomatis masukkan ke perusahaan tersebut
+                    treeData[0].children = treeData[0].children || [];
+                    treeData[0].children.push({
+                        nodeId: genNodeId(),
+                        tipe: 'divisi',
+                        refId: Number(payload.refId),
+                        nama: payload.nama,
+                        children: []
+                    });
+                    renderStructure();
                 } else {
                     showAlert('Arahkan dan lepaskan Divisi tepat di atas kotak Perusahaan atau Divisi induknya.', 'error');
                 }
@@ -921,32 +979,52 @@
         }
 
         // Dropzone pada Node (Perusahaan atau Divisi untuk menyusun hierarki/bertingkat)
-        function onNodeDragOver(event, targetNodeId) {
-            if (!draggedPayload || draggedPayload.tipe !== 'divisi') return;
+        function onNodeDragEnter(event, targetNodeId) {
             event.preventDefault();
+            const payload = getActivePayload(event);
+            if (payload && payload.tipe === 'perusahaan') return;
             event.stopPropagation();
             event.currentTarget.classList.add('drag-over-target');
-            event.dataTransfer.dropEffect = draggedPayload.existingNodeId ? 'move' : 'copy';
+        }
+
+        function onNodeDragOver(event, targetNodeId) {
+            event.preventDefault();
+            const payload = getActivePayload(event);
+            // Jika yang ditarik adalah perusahaan, biarkan bubbling ke canvas utama
+            if (payload && payload.tipe === 'perusahaan') {
+                return;
+            }
+            event.stopPropagation();
+            event.currentTarget.classList.add('drag-over-target');
+            if (event.dataTransfer) {
+                event.dataTransfer.dropEffect = (payload && payload.existingNodeId) ? 'move' : 'copy';
+            }
         }
 
         function onNodeDragLeave(event) {
             event.stopPropagation();
-            event.currentTarget.classList.remove('drag-over-target');
+            if (!event.relatedTarget || !event.currentTarget.contains(event.relatedTarget)) {
+                event.currentTarget.classList.remove('drag-over-target');
+            }
         }
 
         function onNodeDrop(event, targetNodeId) {
             event.preventDefault();
+            const payload = getActivePayload(event);
+            if (!payload) return;
+
+            // Jika perusahaan dilepas di atas kotak perusahaan lain, arahkan ke canvas utama
+            if (payload.tipe === 'perusahaan') {
+                onCanvasDrop(event);
+                return;
+            }
+
             event.stopPropagation();
             event.currentTarget.classList.remove('drag-over-target');
-            document.getElementById('structure-canvas').classList.remove('drag-over-canvas');
+            const canvas = document.getElementById('structure-canvas');
+            if (canvas) canvas.classList.remove('drag-over-canvas');
 
-            let payload = draggedPayload;
-            if (!payload) {
-                try {
-                    payload = JSON.parse(event.dataTransfer.getData('text/plain'));
-                } catch (e) {}
-            }
-            if (!payload || payload.tipe !== 'divisi') return;
+            if (payload.tipe !== 'divisi') return;
 
             const targetNode = findNodeById(treeData, targetNodeId);
             if (!targetNode) return;
@@ -1028,8 +1106,13 @@
                 html += `
                     <li class="tree-division-item"
                         draggable="true"
-                        ondragstart="onDragStartItem(event, 'divisi', '${div.refId}', ${JSON.stringify(div.nama).replace(/"/g, '&quot;')}, '${div.nodeId}')"
+                        data-tipe="divisi"
+                        data-ref-id="${div.refId}"
+                        data-nama="${safeNama}"
+                        data-node-id="${div.nodeId}"
+                        ondragstart="onDragStartRow(event)"
                         ondragend="onDragEndItem(event)"
+                        ondragenter="onNodeDragEnter(event, '${div.nodeId}')"
                         ondragover="onNodeDragOver(event, '${div.nodeId}')"
                         ondragleave="onNodeDragLeave(event)"
                         ondrop="onNodeDrop(event, '${div.nodeId}')">
@@ -1071,6 +1154,7 @@
                 const safeNama = escapeHtml(comp.nama);
                 html += `
                     <li class="tree-company-item"
+                        ondragenter="onNodeDragEnter(event, '${comp.nodeId}')"
                         ondragover="onNodeDragOver(event, '${comp.nodeId}')"
                         ondragleave="onNodeDragLeave(event)"
                         ondrop="onNodeDrop(event, '${comp.nodeId}')">
