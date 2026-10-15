@@ -381,8 +381,8 @@ app.post('/api/restart-machine', async (req, res) => {
         
         await zkInstance.createSocket();
         
-        // Command 11 adalah CMD_RESTART pada ZK protocol
-        await zkInstance.executeCmd(11, '');
+        // Command 1004 adalah CMD_RESTART pada ZK protocol
+        await zkInstance.executeCmd(1004, '');
         
         try {
             await zkInstance.disconnect();
@@ -585,7 +585,7 @@ app.get('/', async (req, res) => {
             data: absensiData,
             totalKaryawan: totalKaryawan,
             totalAbsensi: totalAbsensi,
-            admin: `${req.user.nama}`,
+            admin: `${req.user.nama} (${roleLabel})`,
             user: req.user,
             msg: msg,
             msgType: msgType,
@@ -1450,7 +1450,7 @@ app.get('/api/sync-karyawan', async (req, res) => {
     res.json(result);
 });
 
-// Sync Absensi dari Mesin (Manual & Incremental)
+// Sync Absensi dari Mesin (Manual & Increincremental)
 app.get('/api/sync-absensi', async (req, res) => {
     const config = await getMachineConfig();
     const ip = req.query.ip || config.ip;
