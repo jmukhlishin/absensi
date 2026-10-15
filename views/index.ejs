@@ -139,8 +139,15 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
             flex-wrap: wrap;
+            width: 100%;
+        }
+        .nav-top-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-left: auto;
         }
         .nav-links {
             display: flex;
@@ -801,13 +808,10 @@
                 gap: 12px;
             }
             .nav-top-row {
-                flex-direction: column;
-                align-items: flex-start;
+                flex-direction: row;
+                align-items: center;
+                justify-content: space-between;
                 gap: 10px;
-            }
-            .nav-top-row > div:nth-child(2) {
-                width: 100%;
-                justify-content: flex-end;
             }
             .nav-links {
                 flex-direction: column;
@@ -865,11 +869,11 @@
         <div class="nav">
             <div class="nav-top-row">
                 <div><strong>Login sebagai:</strong> <%= admin %></div>
-                <div style="display: flex; align-items: center; gap: 12px;">
+                <div class="nav-top-actions">
                     <% if (typeof user !== 'undefined' && user && user.role === 'superadmin') { %>
                         <button type="button" class="btn-add-admin" onclick="openAddAdminModal()">+ Tambah Admin</button>
                     <% } %>
-                    <!-- Ikon Profil Akun dipindah ke sini agar sejajar -->
+                    <!-- Ikon Profil Akun sejajar dengan Login sebagai & Tambah Admin -->
                     <div class="profile-menu-container">
                         <button type="button" class="profile-icon-btn" id="profile-icon-btn" onclick="toggleProfileDropdown(event)" title="Menu Profil Akun">
                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -931,8 +935,8 @@
             <div class="info-card">
                 <h3>Status Mesin (IP: <span id="machine-ip-display"><%= typeof machineIp !== 'undefined' ? machineIp : '192.168.0.11' %></span>:<span id="machine-port-display"><%= typeof machinePort !== 'undefined' ? machinePort : 4370 %></span>)</h3>
                 <p id="machine-status">Mengecek...</p>
-                <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px;">
-                    <% if (typeof user !== 'undefined' && user && user.role === 'superadmin') { %>
+                <% if (typeof user !== 'undefined' && user && user.role === 'superadmin') { %>
+                    <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px;">
                         <button type="button" class="btn-edit-machine" onclick="openMachineModal()">
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M12 20h9"></path>
@@ -946,8 +950,8 @@
                                 <line x1="12" y1="2" x2="12" y2="12"></line>
                             </svg>
                         </button>
-                    <% } %>
-                </div>
+                    </div>
+                <% } %>
             </div>
             <div class="info-card">
                 <h3>Total Karyawan</h3>
@@ -1014,6 +1018,7 @@
         </div>
     </div>
 
+    <% if (typeof user !== 'undefined' && user && user.role === 'superadmin') { %>
     <!-- Modal Edit Mesin (IP Address & Port) -->
     <div id="machine-modal" class="account-modal-overlay" onclick="handleModalOverlayClick(event, 'machine-modal')">
         <div class="account-modal-card">
@@ -1043,9 +1048,8 @@
         <div class="account-modal-card" style="text-align: center; max-width: 380px;">
             <div class="confirm-icon">
                 <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-                    <line x1="12" y1="9" x2="12" y2="13"></line>
-                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+                    <line x1="12" y1="2" x2="12" y2="12"></line>
                 </svg>
             </div>
             <h3 style="margin: 0 0 10px 0; color: var(--primary-blue);">Restart Mesin Absensi</h3>
@@ -1056,6 +1060,7 @@
             </div>
         </div>
     </div>
+    <% } %>
 
     <!-- Modal Profil Akun -->
     <div id="profile-modal" class="account-modal-overlay" onclick="handleModalOverlayClick(event, 'profile-modal')">
