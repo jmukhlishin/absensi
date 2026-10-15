@@ -121,6 +121,10 @@ const db = new sqlite3.Database(dbPath, (err) => {
             db.run(`CREATE INDEX IF NOT EXISTS idx_absensi_waktu ON absensi(waktu DESC)`);
             db.run(`CREATE INDEX IF NOT EXISTS idx_absensi_uid_waktu ON absensi(uid, waktu)`);
             db.run(`CREATE INDEX IF NOT EXISTS idx_karyawan_nama ON karyawan(nama)`);
+
+            // Perbaiki database: hapus log absen di masa depan (misal jam 18 padahal siang)
+            const currentTime = moment().format('YYYY-MM-DD HH:mm:ss');
+            db.run(`DELETE FROM absensi WHERE waktu > ?`, [currentTime]);
         });
     }
 });
@@ -1042,16 +1046,9 @@ async function runSyncAbsensi(ip, machinePort = 4370) {
     let socketCreated = false;
 
     try {
-        // 1. Ambil timestamp/ID terakhir yang sudah tersimpan di database untuk incremental sync
-        const lastRecord = await dbGet(`SELECT MAX(waktu) as lastWaktu, MAX(id) as lastId FROM absensi`);
-        const lastWaktu = (lastRecord && lastRecord.lastWaktu) ? lastRecord.lastWaktu : null;
-
-        // Ambil daftar UID pada detik terakhir (jika ada beberapa tap di detik yang sama persis)
-        const existingAtLastWaktu = new Set();
-        if (lastWaktu) {
-            const rowsAtLast = await dbAll(`SELECT uid FROM absensi WHERE waktu = ?`, [lastWaktu]);
-            rowsAtLast.forEach((r) => existingAtLastWaktu.add(String(r.uid)));
-        }
+        // 1. Ambil semua log yang sudah ada untuk incremental sync (menghindari bug skip data karyawan baru)
+        const existingLogs = await dbAll(`SELECT uid, waktu FROM absensi`);
+        const existingLogsSet = new Set(existingLogs.map(r => `${r.uid}|${r.waktu}`));
 
         updateSyncState({
             progress: 15,
@@ -1081,9 +1078,10 @@ async function runSyncAbsensi(ip, machinePort = 4370) {
             message: 'Memfilter log absensi baru (incremental sync)...'
         });
 
-        // 2. Filter hanya log baru setelah data terakhir di database (Incremental)
+        // 2. Filter hanya log baru (Incremental & perbaikan masa depan)
         const seenKeys = new Set();
         const candidateLogs = [];
+        const nowStr = moment().format('YYYY-MM-DD HH:mm:ss');
 
         for (const log of allLogs) {
             if (!log || !log.recordTime) continue;
@@ -1094,13 +1092,11 @@ async function runSyncAbsensi(ip, machinePort = 4370) {
             if (!m.isValid()) continue;
             const waktu = m.format('YYYY-MM-DD HH:mm:ss');
 
-            // Hanya ambil log dengan timestamp setelah data terakhir di DB
-            if (lastWaktu) {
-                if (waktu < lastWaktu) continue;
-                if (waktu === lastWaktu && existingAtLastWaktu.has(uid)) continue;
-            }
+            // Abaikan log masa depan dari mesin yang salah waktu
+            if (waktu > nowStr) continue;
 
             const uniqueKey = `${uid}|${waktu}`;
+            if (existingLogsSet.has(uniqueKey)) continue;
             if (seenKeys.has(uniqueKey)) continue;
             seenKeys.add(uniqueKey);
 
