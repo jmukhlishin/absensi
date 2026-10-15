@@ -84,7 +84,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
                             );
                             db.run(
                                 `INSERT INTO akun (nama, username, password, role) VALUES (?, ?, ?, ?)`,
-                                ['Admin', 'admin', 'admin123', 'superadmin']
+                                ['Admin', 'admin', 'admin123', 'admin']
                             );
                         }
                     });
@@ -291,6 +291,9 @@ app.use(requireAuth);
 // Route Update Konfigurasi Mesin (IP Address & Port)
 app.post('/machine/update', async (req, res) => {
     try {
+        if (req.user.role !== 'superadmin') {
+            return res.redirect('/?msg=' + encodeURIComponent('Akses ditolak! Hanya Superadmin yang dapat edit mesin.') + '&type=error');
+        }
         const ip = (req.body.ip || '').trim();
         const portVal = parseInt(req.body.port, 10) || 4370;
 
@@ -363,6 +366,32 @@ app.post('/admin/add', async (req, res) => {
     } catch (err) {
         console.error('Gagal menambah admin:', err);
         res.redirect('/?msg=' + encodeURIComponent('Gagal menambahkan admin.') + '&type=error');
+    }
+});
+
+// API Restart Mesin
+app.post('/api/restart-machine', async (req, res) => {
+    try {
+        if (req.user.role !== 'superadmin') {
+            return res.status(403).json({ success: false, message: 'Hanya superadmin yang bisa restart mesin.' });
+        }
+        
+        const config = await getMachineConfig();
+        const zkInstance = new ZKLib(config.ip, config.port, 10000, 4000);
+        
+        await zkInstance.createSocket();
+        
+        // Command 11 adalah CMD_RESTART pada ZK protocol
+        await zkInstance.executeCmd(11, '');
+        
+        try {
+            await zkInstance.disconnect();
+        } catch (e) {}
+
+        res.json({ success: true, message: 'Mesin sedang di-restart.' });
+    } catch (err) {
+        console.error('Gagal restart mesin:', err);
+        res.status(500).json({ success: false, message: 'Gagal restart mesin: ' + err.message });
     }
 });
 
@@ -556,7 +585,7 @@ app.get('/', async (req, res) => {
             data: absensiData,
             totalKaryawan: totalKaryawan,
             totalAbsensi: totalAbsensi,
-            admin: `${req.user.nama} (${roleLabel})`,
+            admin: `${req.user.nama}`,
             user: req.user,
             msg: msg,
             msgType: msgType,
@@ -1200,7 +1229,7 @@ async function runSyncKaryawan(ip, machinePort = 4370) {
             }
 
             const processed = Math.min(i + chunk.length, total);
-            const pct = total > 0 ? Math.min(95, Math.round(40 + (processed / total) * 55)) : 95;
+            const pct = total > 0 ? Math.min(95, Math.round(40 + ((processed / total) * 55))) : 95;
             updateSyncState({
                 progress: pct,
                 processed: processed,
@@ -1353,7 +1382,7 @@ async function runSyncAbsensi(ip, machinePort = 4370) {
             }
 
             const processed = Math.min(i + chunk.length, totalNew);
-            const pct = Math.min(95, Math.round(50 + (processed / totalNew) * 45));
+            const pct = Math.min(95, Math.round(50 + ((processed / totalNew) * 45)));
             updateSyncState({
                 progress: pct,
                 processed: processed,
