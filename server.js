@@ -117,6 +117,27 @@ const db = new sqlite3.Database(dbPath, (err) => {
                 FOREIGN KEY (uid) REFERENCES karyawan(uid)
             )`);
 
+            // Skema Database Struktur Perusahaan (Perusahaan, Divisi, dan Hierarki Struktur)
+            db.run(`CREATE TABLE IF NOT EXISTS perusahaan (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nama TEXT NOT NULL
+            )`);
+
+            db.run(`CREATE TABLE IF NOT EXISTS divisi (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nama TEXT NOT NULL
+            )`);
+
+            db.run(`CREATE TABLE IF NOT EXISTS struktur_perusahaan (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                node_id TEXT UNIQUE NOT NULL,
+                tipe TEXT NOT NULL,
+                ref_id INTEGER NOT NULL,
+                nama TEXT NOT NULL,
+                parent_node_id TEXT DEFAULT NULL,
+                urutan INTEGER DEFAULT 0
+            )`);
+
             // Index untuk mempercepat query dashboard, pengecekan sync incremental, dan ekspor data
             db.run(`CREATE INDEX IF NOT EXISTS idx_absensi_waktu ON absensi(waktu DESC)`);
             db.run(`CREATE INDEX IF NOT EXISTS idx_absensi_uid_waktu ON absensi(uid, waktu)`);
@@ -666,6 +687,157 @@ app.get('/karyawan/delete/:uid', (req, res) => {
     db.run('DELETE FROM karyawan WHERE uid = ?', [uid], () => {
         res.redirect('/karyawan');
     });
+});
+
+// Helper Membangun Tree Struktur Perusahaan dari Baris Database
+function buildStrukturTreeFromRows(rows) {
+    const map = new Map();
+    const roots = [];
+
+    rows.forEach(r => {
+        map.set(r.node_id, {
+            nodeId: r.node_id,
+            tipe: r.tipe,
+            refId: r.ref_id,
+            nama: r.nama,
+            children: []
+        });
+    });
+
+    rows.forEach(r => {
+        const node = map.get(r.node_id);
+        if (r.parent_node_id && map.has(r.parent_node_id)) {
+            map.get(r.parent_node_id).children.push(node);
+        } else {
+            roots.push(node);
+        }
+    });
+
+    return roots;
+}
+
+// Halaman Struktur Perusahaan
+app.get('/struktur-perusahaan', async (req, res) => {
+    try {
+        const msg = req.query.msg || '';
+        const msgType = req.query.type || 'success';
+
+        const [perusahaanList, divisiList, strukturRows] = await Promise.all([
+            dbAll(`SELECT id, nama FROM perusahaan ORDER BY id ASC`),
+            dbAll(`SELECT id, nama FROM divisi ORDER BY id ASC`),
+            dbAll(`SELECT node_id, tipe, ref_id, nama, parent_node_id, urutan FROM struktur_perusahaan ORDER BY urutan ASC, id ASC`)
+        ]);
+
+        const strukturTree = buildStrukturTreeFromRows(strukturRows);
+
+        res.render('struktur_perusahaan', {
+            perusahaanList,
+            divisiList,
+            strukturTree,
+            msg,
+            msgType
+        });
+    } catch (err) {
+        console.error('Gagal memuat halaman struktur perusahaan:', err);
+        res.status(500).send('Gagal memuat halaman struktur perusahaan.');
+    }
+});
+
+// Tambah Perusahaan
+app.post('/struktur-perusahaan/perusahaan/add', async (req, res) => {
+    try {
+        const nama = (req.body.nama || '').trim();
+        if (!nama) {
+            return res.redirect('/struktur-perusahaan?msg=' + encodeURIComponent('Nama perusahaan tidak boleh kosong!') + '&type=error');
+        }
+        await dbRun(`INSERT INTO perusahaan (nama) VALUES (?)`, [nama]);
+        res.redirect('/struktur-perusahaan?msg=' + encodeURIComponent('Perusahaan berhasil ditambahkan!') + '&type=success');
+    } catch (err) {
+        console.error('Gagal menambah perusahaan:', err);
+        res.redirect('/struktur-perusahaan?msg=' + encodeURIComponent('Gagal menambahkan perusahaan.') + '&type=error');
+    }
+});
+
+// Hapus Perusahaan
+app.get('/struktur-perusahaan/perusahaan/delete/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        await dbRun(`DELETE FROM perusahaan WHERE id = ?`, [id]);
+        res.redirect('/struktur-perusahaan?msg=' + encodeURIComponent('Perusahaan berhasil dihapus!') + '&type=success');
+    } catch (err) {
+        console.error('Gagal menghapus perusahaan:', err);
+        res.redirect('/struktur-perusahaan?msg=' + encodeURIComponent('Gagal menghapus perusahaan.') + '&type=error');
+    }
+});
+
+// Tambah Divisi
+app.post('/struktur-perusahaan/divisi/add', async (req, res) => {
+    try {
+        const nama = (req.body.nama || '').trim();
+        if (!nama) {
+            return res.redirect('/struktur-perusahaan?msg=' + encodeURIComponent('Nama divisi tidak boleh kosong!') + '&type=error');
+        }
+        await dbRun(`INSERT INTO divisi (nama) VALUES (?)`, [nama]);
+        res.redirect('/struktur-perusahaan?msg=' + encodeURIComponent('Divisi berhasil ditambahkan!') + '&type=success');
+    } catch (err) {
+        console.error('Gagal menambah divisi:', err);
+        res.redirect('/struktur-perusahaan?msg=' + encodeURIComponent('Gagal menambahkan divisi.') + '&type=error');
+    }
+});
+
+// Hapus Divisi
+app.get('/struktur-perusahaan/divisi/delete/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        await dbRun(`DELETE FROM divisi WHERE id = ?`, [id]);
+        res.redirect('/struktur-perusahaan?msg=' + encodeURIComponent('Divisi berhasil dihapus!') + '&type=success');
+    } catch (err) {
+        console.error('Gagal menghapus divisi:', err);
+        res.redirect('/struktur-perusahaan?msg=' + encodeURIComponent('Gagal menghapus divisi.') + '&type=error');
+    }
+});
+
+// Simpan Struktur Perusahaan (Hierarki / Tree)
+app.post('/api/struktur-perusahaan/save', async (req, res) => {
+    try {
+        const tree = Array.isArray(req.body.tree) ? req.body.tree : [];
+        const flatNodes = [];
+        let counter = 0;
+
+        function traverse(nodes, parentNodeId = null) {
+            if (!Array.isArray(nodes)) return;
+            for (const n of nodes) {
+                if (!n || !n.nodeId || !n.nama) continue;
+                counter++;
+                flatNodes.push({
+                    node_id: String(n.nodeId),
+                    tipe: n.tipe === 'perusahaan' ? 'perusahaan' : 'divisi',
+                    ref_id: parseInt(n.refId, 10) || 0,
+                    nama: String(n.nama).trim(),
+                    parent_node_id: parentNodeId ? String(parentNodeId) : null,
+                    urutan: counter
+                });
+                if (Array.isArray(n.children) && n.children.length > 0) {
+                    traverse(n.children, n.nodeId);
+                }
+            }
+        }
+
+        traverse(tree, null);
+
+        await dbRun(`DELETE FROM struktur_perusahaan`);
+        for (const item of flatNodes) {
+            await dbRun(
+                `INSERT INTO struktur_perusahaan (node_id, tipe, ref_id, nama, parent_node_id, urutan) VALUES (?, ?, ?, ?, ?, ?)`,
+                [item.node_id, item.tipe, item.ref_id, item.nama, item.parent_node_id, item.urutan]
+            );
+        }
+
+        res.json({ success: true, message: 'Struktur perusahaan berhasil disimpan!' });
+    } catch (err) {
+        console.error('Gagal menyimpan struktur perusahaan:', err);
+        res.status(500).json({ success: false, error: 'Gagal menyimpan struktur perusahaan: ' + err.message });
+    }
 });
 
 // Ekspor Data Karyawan / Beserta Absensi ke Excel (.xlsx)
