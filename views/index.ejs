@@ -1078,11 +1078,11 @@
                 </p>
                 <div class="account-form-group">
                     <label for="del-start-date">Mulai Tanggal</label>
-                    <input type="date" id="del-start-date" name="start_date" required>
+                    <input type="date" id="del-start-date" name="start_date" min="<%= typeof oldestAbsensiDate !== 'undefined' ? oldestAbsensiDate : '' %>" max="<%= typeof todayDate !== 'undefined' ? todayDate : '' %>" onchange="onDeleteDateChange('start')" oninput="onDeleteDateChange('start')" required>
                 </div>
                 <div class="account-form-group">
                     <label for="del-end-date">Sampai Tanggal</label>
-                    <input type="date" id="del-end-date" name="end_date" required>
+                    <input type="date" id="del-end-date" name="end_date" min="<%= typeof oldestAbsensiDate !== 'undefined' ? oldestAbsensiDate : '' %>" max="<%= typeof todayDate !== 'undefined' ? todayDate : '' %>" onchange="onDeleteDateChange('end')" oninput="onDeleteDateChange('end')" required>
                 </div>
                 <div class="account-form-group" style="flex-direction: row; align-items: flex-start; gap: 10px; margin-top: 10px;">
                     <input type="checkbox" id="del-local" name="delete_local" value="1" style="width: 20px; height: 20px; margin-top: 2px;">
@@ -1193,7 +1193,68 @@
     <script>
         let currentPageActivePage = <%= currentPage || 1 %>;
         let currentSearchQuery = <%- JSON.stringify(typeof searchQuery !== 'undefined' ? searchQuery : '') %>;
+        let oldestAbsensiDateBound = <%- JSON.stringify(typeof oldestAbsensiDate !== 'undefined' ? oldestAbsensiDate : '') %>;
+        let todayDateBound = <%- JSON.stringify(typeof todayDate !== 'undefined' ? todayDate : '') %>;
         let searchDebounceTimer = null;
+
+        function applyDeleteDateBounds() {
+            const startInput = document.getElementById('del-start-date');
+            const endInput = document.getElementById('del-end-date');
+            if (!startInput || !endInput) return;
+
+            const minDate = oldestAbsensiDateBound || todayDateBound;
+            const maxDate = todayDateBound || oldestAbsensiDateBound;
+
+            if (minDate) {
+                startInput.min = minDate;
+                endInput.min = (startInput.value && startInput.value >= minDate) ? startInput.value : minDate;
+            }
+            if (maxDate) {
+                endInput.max = maxDate;
+                startInput.max = (endInput.value && endInput.value <= maxDate) ? endInput.value : maxDate;
+            }
+
+            if (startInput.value) {
+                if (minDate && startInput.value < minDate) startInput.value = minDate;
+                if (maxDate && startInput.value > maxDate) startInput.value = maxDate;
+            }
+            if (endInput.value) {
+                if (minDate && endInput.value < minDate) endInput.value = minDate;
+                if (maxDate && endInput.value > maxDate) endInput.value = maxDate;
+            }
+        }
+
+        function onDeleteDateChange(which) {
+            const startInput = document.getElementById('del-start-date');
+            const endInput = document.getElementById('del-end-date');
+            if (!startInput || !endInput) return;
+
+            const minDate = oldestAbsensiDateBound || todayDateBound;
+            const maxDate = todayDateBound || oldestAbsensiDateBound;
+
+            if (startInput.value) {
+                if (minDate && startInput.value < minDate) startInput.value = minDate;
+                if (maxDate && startInput.value > maxDate) startInput.value = maxDate;
+            }
+            if (endInput.value) {
+                if (minDate && endInput.value < minDate) endInput.value = minDate;
+                if (maxDate && endInput.value > maxDate) endInput.value = maxDate;
+            }
+
+            if (which === 'start' && startInput.value) {
+                endInput.min = startInput.value;
+                if (endInput.value && endInput.value < startInput.value) {
+                    endInput.value = startInput.value;
+                }
+            } else if (which === 'end' && endInput.value) {
+                startInput.max = endInput.value;
+                if (startInput.value && startInput.value > endInput.value) {
+                    startInput.value = endInput.value;
+                }
+            } else {
+                applyDeleteDateBounds();
+            }
+        }
 
         function showAlert(msg, type = 'success') {
             let alertBox = document.getElementById('dynamic-alert');
@@ -1236,7 +1297,14 @@
             }
         }
 
-        function openDeleteAbsensiModal() {
+        async function openDeleteAbsensiModal() {
+            try {
+                const res = await fetch('/api/dashboard-summary?page=' + (currentPageActivePage || 1));
+                const data = await res.json();
+                if (data && data.oldestAbsensiDate) oldestAbsensiDateBound = data.oldestAbsensiDate;
+                if (data && data.todayDate) todayDateBound = data.todayDate;
+            } catch (_) {}
+            applyDeleteDateBounds();
             const modal = document.getElementById('delete-absensi-modal');
             if (modal) modal.classList.add('active');
         }
@@ -1247,6 +1315,7 @@
         }
 
         function openConfirmDeleteAbsensiModal() {
+            applyDeleteDateBounds();
             const form = document.getElementById('delete-absensi-form');
             if (!form.checkValidity()) {
                 form.reportValidity();
@@ -1467,6 +1536,9 @@
                 const res = await fetch('/api/dashboard-summary?' + queryParams.toString());
                 const data = await res.json();
                 currentPageActivePage = data.currentPage || page;
+                if (data.oldestAbsensiDate) oldestAbsensiDateBound = data.oldestAbsensiDate;
+                if (data.todayDate) todayDateBound = data.todayDate;
+                applyDeleteDateBounds();
                 
                 // Update Tabel
                 const tbody = document.getElementById('absensi-table-body');
@@ -1484,8 +1556,8 @@
                     tbody.innerHTML = html;
                 } else {
                     const emptyMsg = (search && search.trim())
-                                ? `Tidak ada data absensi untuk karyawan "${search.trim()}".`
-                                : 'Belum ada data absensi.';
+                        ? `Tidak ada data absensi untuk karyawan "${search.trim()}".`
+                        : 'Belum ada data absensi.';
                     tbody.innerHTML = `<tr><td colspan="4" style="text-align: center;">${emptyMsg}</td></tr>`;
                 }
 
@@ -1608,6 +1680,7 @@
 
         // Cek jika halaman direfresh di tengah-tengah sinkronisasi (lanjutkan overlay progress)
         window.addEventListener('load', async () => {
+            applyDeleteDateBounds();
             try {
                 const res = await fetch('/api/sync-status');
                 const state = await res.json();
