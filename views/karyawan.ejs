@@ -356,7 +356,7 @@
         }
         .btn-edit:hover { background-color: #ffb300; }
         .btn-delete { background-color: #dc3545; }
-        .btn-delete:hover { background-color: #b02a37; }
+        .btn-delete:hover { background-color: #c82333; }
 
         /* Modal Popup */
         .modal-overlay {
@@ -390,6 +390,9 @@
         .modal-card.modal-lg {
             max-width: 620px;
         }
+        .modal-card.modal-warning {
+            border-top-color: #f59e0b;
+        }
         @keyframes modalFadeIn {
             from { opacity: 0; transform: translateY(-10px); }
             to { opacity: 1; transform: translateY(0); }
@@ -406,6 +409,12 @@
             margin: 0;
             font-size: 20px;
             color: var(--primary-blue);
+        }
+        .modal-header.warning-header h3 {
+            color: #d97706;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
         .btn-close-x {
             background: none;
@@ -479,6 +488,19 @@
         }
         .btn-submit:hover {
             background-color: #ffb300;
+        }
+        .btn-understand {
+            padding: 10px 20px;
+            background-color: #f59e0b;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .btn-understand:hover {
+            background-color: #d97706;
         }
 
         /* Checkbox Styling & Upload Select Modal */
@@ -645,7 +667,7 @@
             .modal-actions {
                 flex-direction: column-reverse;
             }
-            .btn-cancel, .btn-submit, .btn-delete {
+            .btn-cancel, .btn-submit, .btn-delete, .btn-understand {
                 width: 100%;
                 padding: 12px;
             }
@@ -814,6 +836,25 @@
                 <div class="modal-actions">
                     <button type="button" class="btn-cancel" onclick="closeDeleteConfirmModal()">Kembali</button>
                     <button type="button" class="btn-delete" id="btn-confirm-delete" style="padding: 10px 20px; border: none; font-size: 14px; font-weight: 700; border-radius: 8px; color: white; cursor: pointer;" onclick="confirmDeleteKaryawan()">Ya, Hapus</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Notifikasi Karyawan Tidak Ditemukan -->
+    <div id="notif-modal" class="modal-overlay" onclick="handleOverlayClick(event)">
+        <div class="modal-card modal-warning">
+            <div class="modal-header warning-header">
+                <h3>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                    Pemberitahuan
+                </h3>
+                <button type="button" class="btn-close-x" onclick="closeNotifModal()" title="Tutup">&times;</button>
+            </div>
+            <div class="modal-form">
+                <p id="notif-message" style="margin-top:0; margin-bottom:15px; font-size:15px; line-height:1.5; color:var(--text-dark);"></p>
+                <div class="modal-actions">
+                    <button type="button" class="btn-understand" onclick="closeNotifModal()">OK, Mengerti</button>
                 </div>
             </div>
         </div>
@@ -1013,6 +1054,15 @@
             const box = document.getElementById('alert-box');
             if (box) box.classList.remove('show');
         }
+        
+        function showNotifModal(message) {
+            document.getElementById('notif-message').innerHTML = message;
+            document.getElementById('notif-modal').classList.add('active');
+        }
+        
+        function closeNotifModal() {
+            document.getElementById('notif-modal').classList.remove('active');
+        }
 
         // Ambil semua perusahaan dari struktur perusahaan (dan master perusahaan)
         function getPerusahaanOptions() {
@@ -1204,8 +1254,8 @@
             const filterEmptyRow = document.getElementById('filter-empty-row');
             if (filterEmptyRow) tbody.appendChild(filterEmptyRow);
 
-            document.getElementById('sort-icon-id').innerText = '⇕';
-            document.getElementById('sort-icon-nama').innerText = '⇕';
+            document.getElementById('sort-icon-id').innerText = '▼';
+            document.getElementById('sort-icon-nama').innerText = '▼';
             const activeIcon = document.getElementById('sort-icon-' + column);
             if (activeIcon) {
                 activeIcon.innerText = currentSortOrder === 'asc' ? '▲' : '▼';
@@ -1354,7 +1404,11 @@
                     }
                     showAlert(result.message || 'Karyawan berhasil dihapus!', 'success');
                 } else {
-                    showAlert(result.message || 'Gagal menghapus karyawan.', 'error');
+                    if (result.notFound) {
+                        showNotifModal(result.message);
+                    } else {
+                        showAlert(result.message || 'Gagal menghapus karyawan.', 'error');
+                    }
                 }
             } catch (err) {
                 closeDeleteConfirmModal();
@@ -1375,6 +1429,8 @@
                 closeDeleteOptionModal();
             } else if (e.target.id === 'delete-confirm-modal') {
                 closeDeleteConfirmModal();
+            } else if (e.target.id === 'notif-modal') {
+                closeNotifModal();
             }
         }
 
@@ -1386,6 +1442,7 @@
                 closeExportModal();
                 closeDeleteOptionModal();
                 closeDeleteConfirmModal();
+                closeNotifModal();
             }
             if (document.body.classList.contains('upload-locked')) {
                 e.preventDefault();
