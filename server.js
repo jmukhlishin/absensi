@@ -531,7 +531,19 @@ app.post('/api/restart-machine', async (req, res) => {
     }
 });
 
-// API Hapus Data Absensi di Mesin (dan Opsi Checklist Hapus Database Lokal) - Hanya Superadmin
+// Helper encode waktu ke format integer 32-bit ZKTeco
+function encodeZkTime(dateStr, isEndOfDay = false) {
+    const m = moment(dateStr, 'YYYY-MM-DD');
+    const year = m.year();
+    const month = m.month() + 1;
+    const day = m.date();
+    const hour = isEndOfDay ? 23 : 0;
+    const minute = isEndOfDay ? 59 : 0;
+    const second = isEndOfDay ? 59 : 0;
+    return (((year - 2000) * 12 * 31 + ((month - 1) * 31) + (day - 1)) * 86400) + (hour * 3600) + (minute * 60) + second;
+}
+
+// API Hapus Data Absensi di Mesin Berdasarkan Rentang Waktu (dan Opsi Checklist Hapus Database Lokal) - Hanya Superadmin
 app.post('/api/absensi/delete', async (req, res) => {
     try {
         if (req.user.role !== 'superadmin') {
@@ -541,33 +553,90 @@ app.post('/api/absensi/delete', async (req, res) => {
         const { start_date, end_date, delete_local } = req.body;
         
         if (!start_date || !end_date) {
-            return res.redirect('/?msg=' + encodeURIComponent('Tanggal mulai dan sampai harus diisi.') + '&type=error');
+            return res.redirect('/?msg=' + encodeURIComponent('Rentang tanggal mulai dan sampai harus diisi.') + '&type=error');
+        }
+
+        if (start_date > end_date) {
+            return res.redirect('/?msg=' + encodeURIComponent('Tanggal mulai tidak boleh lebih besar dari tanggal sampai.') + '&type=error');
         }
 
         if (syncState.isSyncing) {
             return res.redirect('/?msg=' + encodeURIComponent('Mesin sedang melakukan sinkronisasi data. Harap tunggu hingga selesai.') + '&type=error');
         }
 
-        // 1. Hapus data absensi/kehadiran di mesin absensi (utama)
+        // 1. Hapus data absensi/kehadiran di mesin absensi berdasarkan rentang waktu
         let machineSuccess = false;
         let machineError = '';
+        let deletedInMachineCount = 0;
+
         try {
             const config = await getMachineConfig();
             const zkInstance = new ZKLib(config.ip, config.port, 10000, 4000);
             await zkInstance.createSocket();
-            
-            if (typeof zkInstance.clearAttendanceLog === 'function') {
-                await zkInstance.clearAttendanceLog();
-            } else {
-                // CMD_CLEAR_ATTLOG (15 pada standar ZKTeco)
-                await zkInstance.executeCmd(15, '');
+
+            // Baca log dari mesin terlebih dahulu untuk memisahkan log di dalam & di luar rentang waktu
+            const logsResp = await zkInstance.getAttendances();
+            const allMachineLogs = (logsResp && Array.isArray(logsResp.data)) ? logsResp.data : [];
+
+            const logsInRange = [];
+            const logsOutsideRange = [];
+            const nowStr = moment().format('YYYY-MM-DD HH:mm:ss');
+
+            for (const log of allMachineLogs) {
+                if (!log || !log.recordTime) continue;
+                const uid = String(log.deviceUserId || log.userId || log.uid || '').trim();
+                if (!uid) continue;
+
+                const m = moment(log.recordTime);
+                if (!m.isValid()) continue;
+                const waktu = m.format('YYYY-MM-DD HH:mm:ss');
+                if (waktu > nowStr) continue;
+
+                const logDate = waktu.slice(0, 10);
+                if (logDate >= start_date && logDate <= end_date) {
+                    logsInRange.push({ uid, waktu });
+                } else {
+                    logsOutsideRange.push({ uid, waktu });
+                }
             }
-            
+
+            deletedInMachineCount = logsInRange.length;
+
+            // Amankan log di luar rentang tanggal ke database lokal sebelum membersihkan memori mesin
+            if (logsOutsideRange.length > 0) {
+                const existingLogs = await dbAll(`SELECT uid, waktu FROM absensi`);
+                const existingLogsSet = new Set(existingLogs.map(r => `${r.uid}|${r.waktu}`));
+                logsOutsideRange.sort((a, b) => a.waktu.localeCompare(b.waktu));
+
+                for (const item of logsOutsideRange) {
+                    const key = `${item.uid}|${item.waktu}`;
+                    if (!existingLogsSet.has(key)) {
+                        await saveAttendanceLog(item.uid, item.waktu, 'Mesin');
+                        existingLogsSet.add(key);
+                    }
+                }
+            }
+
+            // Kirim paket rentang waktu (start_time & end_time) dan bersihkan log kehadiran di mesin
+            const timeRangeBuf = Buffer.alloc(8);
+            timeRangeBuf.writeUInt32LE(encodeZkTime(start_date, false), 0);
+            timeRangeBuf.writeUInt32LE(encodeZkTime(end_date, true), 4);
+
+            try {
+                await zkInstance.executeCmd(15, timeRangeBuf);
+            } catch (_) {
+                if (typeof zkInstance.clearAttendanceLog === 'function') {
+                    await zkInstance.clearAttendanceLog();
+                } else {
+                    await zkInstance.executeCmd(15, '');
+                }
+            }
+
             try {
                 await zkInstance.executeCmd(1013, '');
             } catch (_) {}
 
-            try { await zkInstance.disconnect(); } catch(e) {}
+            try { await zkInstance.disconnect(); } catch (e) {}
             machineSuccess = true;
         } catch (e) {
             console.error('Gagal hapus data absensi di mesin:', e);
@@ -589,8 +658,8 @@ app.post('/api/absensi/delete', async (req, res) => {
         }
 
         const successMsg = localDeleted
-            ? `Data absensi di mesin absensi serta database lokal (${start_date} s/d ${end_date}) berhasil dihapus!`
-            : `Data absensi/kehadiran di mesin absensi berhasil dihapus!`;
+            ? `Data absensi di mesin (${deletedInMachineCount} log) serta database lokal pada rentang ${start_date} s/d ${end_date} berhasil dihapus!`
+            : `Data absensi di mesin pada rentang ${start_date} s/d ${end_date} (${deletedInMachineCount} log) berhasil dihapus!`;
 
         res.redirect('/?msg=' + encodeURIComponent(successMsg) + '&type=success');
     } catch (err) {
