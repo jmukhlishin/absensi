@@ -212,10 +212,10 @@ async function getMachineConfig() {
 
 // Helper koneksi & penghapusan user/karyawan di mesin absensi (ZKTeco protocol CMD_DELETE_USER = 18)
 async function deleteUserFromMachine(targetUid, targetNama = '') {
-    const cleanUid = String(targetUid || '').trim();
-    const cleanNama = String(targetNama || '').trim();
-    if (!cleanUid) {
-        throw new Error('ID karyawan tidak valid.');
+    const cleanUid = String(targetUid || '').replace(/\0/g, '').trim();
+    const cleanNama = String(targetNama || '').replace(/\0/g, '').trim();
+    if (!cleanUid && !cleanNama) {
+        throw new Error('ID atau nama karyawan tidak valid.');
     }
 
     if (syncState.isSyncing) {
@@ -230,80 +230,83 @@ async function deleteUserFromMachine(targetUid, targetNama = '') {
         await zkInstance.createSocket();
         socketCreated = true;
 
-        // Ambil daftar user di mesin untuk mencocokkan internal uid mesin (2-byte integer) dengan userId / ID karyawan
-        let machineUserList = null;
-        try {
-            const usersResp = await zkInstance.getUsers();
-            if (usersResp && Array.isArray(usersResp.data)) {
-                machineUserList = usersResp.data;
-            }
-        } catch (getUsersErr) {
-            console.error('Gagal mengambil daftar user mesin sebelum hapus:', getUsersErr);
+        // Ambil daftar user di mesin untuk mengecek apakah ID atau Nama karyawan masih ada di mesin
+        const usersResp = await zkInstance.getUsers();
+        if (!usersResp || !Array.isArray(usersResp.data)) {
+            throw new Error('Gagal membaca daftar karyawan dari mesin absensi.');
         }
 
+        const machineUserList = usersResp.data;
         const matchedInternalUids = new Set();
+        const targetNameLower = cleanNama.toLowerCase();
+        const defaultUserLabel = `user ${cleanUid}`.toLowerCase();
 
-        if (Array.isArray(machineUserList)) {
-            // 1. Prioritas utama: cocokkan berdasarkan userId (PIN/ID Karyawan di mesin)
-            for (const u of machineUserList) {
-                if (!u) continue;
-                const uUserId = String(u.userId !== undefined && u.userId !== null ? u.userId : '').trim();
-                const uInternalUid = parseInt(u.uid, 10);
-                if (uUserId && uUserId === cleanUid && !isNaN(uInternalUid) && uInternalUid > 0 && uInternalUid <= 65535) {
-                    matchedInternalUids.add(uInternalUid);
+        // Normalisasi data user dari mesin (bersihkan null-byte bawaan buffer ZKTeco)
+        const normalizedUsers = [];
+        for (const u of machineUserList) {
+            if (!u) continue;
+            const uInternalUid = parseInt(u.uid, 10);
+            if (isNaN(uInternalUid) || uInternalUid <= 0 || uInternalUid > 65535) continue;
+
+            const uUserId = String(u.userId !== undefined && u.userId !== null ? u.userId : '').replace(/\0/g, '').trim();
+            const uUidStr = String(u.uid !== undefined && u.uid !== null ? u.uid : '').replace(/\0/g, '').trim();
+            const uName = String(u.name || '').replace(/\0/g, '').trim();
+            const uNameLower = uName.toLowerCase();
+
+            normalizedUsers.push({
+                internalUid: uInternalUid,
+                userId: uUserId,
+                uidStr: uUidStr,
+                name: uName,
+                nameLower: uNameLower
+            });
+        }
+
+        // 1. Cek kecocokan berdasarkan ID (userId) DAN/ATAU Nama di mesin
+        for (const u of normalizedUsers) {
+            const idMatched = cleanUid && (u.userId === cleanUid || (!u.userId && u.uidStr === cleanUid));
+            const nameMatched = targetNameLower && u.nameLower && (
+                u.nameLower === targetNameLower ||
+                (u.nameLower.length >= 3 && (targetNameLower.startsWith(u.nameLower) || u.nameLower.startsWith(targetNameLower)))
+            );
+
+            if (idMatched && nameMatched) {
+                matchedInternalUids.add(u.internalUid);
+            } else if (idMatched && (!targetNameLower || !u.nameLower || targetNameLower === defaultUserLabel)) {
+                // ID cocok dan nama di mesin kosong / masih default "User <ID>"
+                matchedInternalUids.add(u.internalUid);
+            } else if (nameMatched && (!cleanUid || u.userId === cleanUid || u.uidStr === cleanUid)) {
+                matchedInternalUids.add(u.internalUid);
+            }
+        }
+
+        // 2. Jika belum ditemukan dengan kombinasi di atas, cek apakah Nama karyawan persis ada di mesin
+        if (matchedInternalUids.size === 0 && targetNameLower) {
+            for (const u of normalizedUsers) {
+                if (u.nameLower && u.nameLower === targetNameLower) {
+                    matchedInternalUids.add(u.internalUid);
                 }
             }
+        }
 
-            // 2. Jika belum ketemu via userId, cek kecocokan berdasarkan uid internal (dengan validasi nama bila tersedia)
-            if (matchedInternalUids.size === 0) {
-                for (const u of machineUserList) {
-                    if (!u) continue;
-                    const uUidStr = String(u.uid !== undefined && u.uid !== null ? u.uid : '').trim();
-                    const uInternalUid = parseInt(u.uid, 10);
-                    const uName = String(u.name || '').trim().toLowerCase();
-                    if (uUidStr === cleanUid && !isNaN(uInternalUid) && uInternalUid > 0 && uInternalUid <= 65535) {
-                        if (!cleanNama || !uName || uName === cleanNama.toLowerCase()) {
-                            matchedInternalUids.add(uInternalUid);
-                        }
+        // 3. Jika belum ditemukan juga, cek apakah ID (userId) ada di mesin (selama tidak bentrok dengan nama karyawan lain)
+        if (matchedInternalUids.size === 0 && cleanUid) {
+            for (const u of normalizedUsers) {
+                if (u.userId === cleanUid) {
+                    if (!targetNameLower || !u.nameLower) {
+                        matchedInternalUids.add(u.internalUid);
                     }
                 }
             }
+        }
 
-            // 3. Jika masih belum ketemu dan nama tersedia, cek berdasarkan nama yang persis sama
-            if (matchedInternalUids.size === 0 && cleanNama) {
-                const targetNameLower = cleanNama.toLowerCase();
-                for (const u of machineUserList) {
-                    if (!u) continue;
-                    const uName = String(u.name || '').trim().toLowerCase();
-                    const uInternalUid = parseInt(u.uid, 10);
-                    if (uName && uName === targetNameLower && !isNaN(uInternalUid) && uInternalUid > 0 && uInternalUid <= 65535) {
-                        matchedInternalUids.add(uInternalUid);
-                    }
-                }
-            }
-
-            // 4. Fallback aman: jika tidak ada di list tapi ID berupa angka valid dan slot tersebut tidak dipakai user lain
-            if (matchedInternalUids.size === 0) {
-                const parsedUid = parseInt(cleanUid, 10);
-                if (!isNaN(parsedUid) && parsedUid > 0 && parsedUid <= 65535) {
-                    const occupiedByOther = machineUserList.some(u => u && parseInt(u.uid, 10) === parsedUid);
-                    if (!occupiedByOther) {
-                        matchedInternalUids.add(parsedUid);
-                    } else {
-                        throw new Error(`Karyawan "${cleanNama || cleanUid}" (ID: ${cleanUid}) tidak ditemukan di mesin absensi.`);
-                    }
-                } else {
-                    throw new Error(`Karyawan "${cleanNama || cleanUid}" (ID: ${cleanUid}) tidak ditemukan di mesin absensi.`);
-                }
-            }
-        } else {
-            // Jika gagal membaca getUsers, gunakan konversi integer langsung dari ID karyawan
-            const parsedUid = parseInt(cleanUid, 10);
-            if (!isNaN(parsedUid) && parsedUid > 0 && parsedUid <= 65535) {
-                matchedInternalUids.add(parsedUid);
-            } else {
-                throw new Error(`ID Karyawan (${cleanUid}) tidak dapat ditemukan pada mesin absensi.`);
-            }
+        // Jika ID maupun Nama karyawan tidak ditemukan di mesin, keluarkan error khusus agar muncul notifikasi
+        if (matchedInternalUids.size === 0) {
+            const notFoundErr = new Error(
+                `Karyawan ${cleanNama ? '"' + cleanNama + '" ' : ''}(ID: ${cleanUid || '-'}) tidak ada di dalam mesin absensi (sudah dihapus sebelumnya atau belum terdaftar di mesin).`
+            );
+            notFoundErr.code = 'USER_NOT_FOUND_IN_MACHINE';
+            throw notFoundErr;
         }
 
         // Kirim perintah hapus user ke mesin (CMD_DELETE_USER = 18 pada protokol ZKTeco)
@@ -898,7 +901,10 @@ app.get('/karyawan/delete/:uid', async (req, res) => {
             return res.redirect('/karyawan?msg=' + encodeURIComponent(`Karyawan ${nama ? '"' + nama + '" ' : ''}(ID: ${uid}) berhasil dihapus dari mesin absensi!`) + '&type=success');
         } catch (err) {
             console.error('Gagal menghapus karyawan di mesin:', err);
-            return res.redirect('/karyawan?msg=' + encodeURIComponent('Gagal menghapus karyawan di mesin: ' + err.message) + '&type=error');
+            const errMsg = err && err.code === 'USER_NOT_FOUND_IN_MACHINE'
+                ? err.message
+                : ('Gagal menghapus karyawan di mesin: ' + (err && err.message ? err.message : 'Koneksi gagal'));
+            return res.redirect('/karyawan?msg=' + encodeURIComponent(errMsg) + '&type=error');
         }
     }
 
@@ -932,6 +938,13 @@ app.post('/api/karyawan/delete-machine', async (req, res) => {
         });
     } catch (err) {
         console.error('Error hapus karyawan di mesin:', err);
+        if (err && err.code === 'USER_NOT_FOUND_IN_MACHINE') {
+            return res.status(404).json({
+                success: false,
+                notFound: true,
+                message: err.message
+            });
+        }
         res.status(500).json({
             success: false,
             message: 'Gagal menghapus karyawan di mesin: ' + (err && err.message ? err.message : 'Koneksi ke mesin gagal.')
