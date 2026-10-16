@@ -1081,9 +1081,12 @@
                     <input type="date" id="del-end-date" name="end_date" required>
                 </div>
                 <div class="account-form-group" style="flex-direction: row; align-items: flex-start; gap: 10px; margin-top: 10px;">
-                    <input type="checkbox" id="del-machine" name="delete_machine" value="1" style="width: 20px; height: 20px; margin-top: 2px;" checked>
-                    <label for="del-machine" style="cursor: pointer; font-size: 13px; color: #dc2626; line-height: 1.4; font-weight: normal;">Hapus juga log kehadiran di Mesin (<b>Perhatian:</b> ini akan menghapus <u>semua</u> log kehadiran di mesin tanpa batasan waktu).</label>
+                    <input type="checkbox" id="del-local" name="delete_local" value="1" style="width: 20px; height: 20px; margin-top: 2px;">
+                    <label for="del-local" style="cursor: pointer; font-size: 13px; color: #dc2626; line-height: 1.4; font-weight: normal;">Saya juga ingin menghapus log kehadiran di Database Lokal sistem ini.</label>
                 </div>
+                <p style="font-size: 13px; color: var(--text-muted); margin: 0; line-height: 1.4;">
+                    <b style="color: #dc2626;">Perhatian:</b> Data di mesin absensi akan dihapus <u>semuanya</u> (seluruh log tanpa batas waktu). Pilihan rentang tanggal di atas hanya berlaku untuk penghapusan di Database Lokal (jika diceklis).
+                </p>
                 <div class="account-modal-actions" style="margin-top: 20px;">
                     <button type="button" class="btn-cancel" onclick="closeDeleteAbsensiModal()">Batal</button>
                     <button type="button" class="btn-save" style="background-color: #dc2626; color: white;" onclick="confirmDeleteAbsensi()">Hapus Data</button>
@@ -1429,8 +1432,8 @@
                     tbody.innerHTML = html;
                 } else {
                     const emptyMsg = (search && search.trim())
-                            ? `Tidak ada data absensi untuk karyawan "${search.trim()}".`
-                            : 'Belum ada data absensi.';
+                                ? `Tidak ada data absensi untuk karyawan "${search.trim()}".`
+                                : 'Belum ada data absensi.';
                     tbody.innerHTML = `<tr><td colspan="4" style="text-align: center;">${emptyMsg}</td></tr>`;
                 }
 
