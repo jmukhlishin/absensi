@@ -210,6 +210,139 @@ async function getMachineConfig() {
     }
 }
 
+// Helper koneksi & penghapusan user/karyawan di mesin absensi (ZKTeco protocol CMD_DELETE_USER = 18)
+async function deleteUserFromMachine(targetUid, targetNama = '') {
+    const cleanUid = String(targetUid || '').trim();
+    const cleanNama = String(targetNama || '').trim();
+    if (!cleanUid) {
+        throw new Error('ID karyawan tidak valid.');
+    }
+
+    if (syncState.isSyncing) {
+        throw new Error('Mesin sedang melakukan sinkronisasi data. Harap tunggu hingga proses selesai.');
+    }
+
+    const config = await getMachineConfig();
+    const zkInstance = new ZKLib(config.ip, config.port, 10000, 4000);
+    let socketCreated = false;
+
+    try {
+        await zkInstance.createSocket();
+        socketCreated = true;
+
+        // Ambil daftar user di mesin untuk mencocokkan internal uid mesin (2-byte integer) dengan userId / ID karyawan
+        let machineUserList = null;
+        try {
+            const usersResp = await zkInstance.getUsers();
+            if (usersResp && Array.isArray(usersResp.data)) {
+                machineUserList = usersResp.data;
+            }
+        } catch (getUsersErr) {
+            console.error('Gagal mengambil daftar user mesin sebelum hapus:', getUsersErr);
+        }
+
+        const matchedInternalUids = new Set();
+
+        if (Array.isArray(machineUserList)) {
+            // 1. Prioritas utama: cocokkan berdasarkan userId (PIN/ID Karyawan di mesin)
+            for (const u of machineUserList) {
+                if (!u) continue;
+                const uUserId = String(u.userId !== undefined && u.userId !== null ? u.userId : '').trim();
+                const uInternalUid = parseInt(u.uid, 10);
+                if (uUserId && uUserId === cleanUid && !isNaN(uInternalUid) && uInternalUid > 0 && uInternalUid <= 65535) {
+                    matchedInternalUids.add(uInternalUid);
+                }
+            }
+
+            // 2. Jika belum ketemu via userId, cek kecocokan berdasarkan uid internal (dengan validasi nama bila tersedia)
+            if (matchedInternalUids.size === 0) {
+                for (const u of machineUserList) {
+                    if (!u) continue;
+                    const uUidStr = String(u.uid !== undefined && u.uid !== null ? u.uid : '').trim();
+                    const uInternalUid = parseInt(u.uid, 10);
+                    const uName = String(u.name || '').trim().toLowerCase();
+                    if (uUidStr === cleanUid && !isNaN(uInternalUid) && uInternalUid > 0 && uInternalUid <= 65535) {
+                        if (!cleanNama || !uName || uName === cleanNama.toLowerCase()) {
+                            matchedInternalUids.add(uInternalUid);
+                        }
+                    }
+                }
+            }
+
+            // 3. Jika masih belum ketemu dan nama tersedia, cek berdasarkan nama yang persis sama
+            if (matchedInternalUids.size === 0 && cleanNama) {
+                const targetNameLower = cleanNama.toLowerCase();
+                for (const u of machineUserList) {
+                    if (!u) continue;
+                    const uName = String(u.name || '').trim().toLowerCase();
+                    const uInternalUid = parseInt(u.uid, 10);
+                    if (uName && uName === targetNameLower && !isNaN(uInternalUid) && uInternalUid > 0 && uInternalUid <= 65535) {
+                        matchedInternalUids.add(uInternalUid);
+                    }
+                }
+            }
+
+            // 4. Fallback aman: jika tidak ada di list tapi ID berupa angka valid dan slot tersebut tidak dipakai user lain
+            if (matchedInternalUids.size === 0) {
+                const parsedUid = parseInt(cleanUid, 10);
+                if (!isNaN(parsedUid) && parsedUid > 0 && parsedUid <= 65535) {
+                    const occupiedByOther = machineUserList.some(u => u && parseInt(u.uid, 10) === parsedUid);
+                    if (!occupiedByOther) {
+                        matchedInternalUids.add(parsedUid);
+                    } else {
+                        throw new Error(`Karyawan "${cleanNama || cleanUid}" (ID: ${cleanUid}) tidak ditemukan di mesin absensi.`);
+                    }
+                } else {
+                    throw new Error(`Karyawan "${cleanNama || cleanUid}" (ID: ${cleanUid}) tidak ditemukan di mesin absensi.`);
+                }
+            }
+        } else {
+            // Jika gagal membaca getUsers, gunakan konversi integer langsung dari ID karyawan
+            const parsedUid = parseInt(cleanUid, 10);
+            if (!isNaN(parsedUid) && parsedUid > 0 && parsedUid <= 65535) {
+                matchedInternalUids.add(parsedUid);
+            } else {
+                throw new Error(`ID Karyawan (${cleanUid}) tidak dapat ditemukan pada mesin absensi.`);
+            }
+        }
+
+        // Kirim perintah hapus user ke mesin (CMD_DELETE_USER = 18 pada protokol ZKTeco)
+        for (const internalUid of matchedInternalUids) {
+            if (typeof zkInstance.deleteUser === 'function') {
+                await zkInstance.deleteUser(internalUid);
+            } else {
+                const reqData = Buffer.alloc(2);
+                reqData.writeUInt16LE(internalUid, 0);
+                await zkInstance.executeCmd(18, reqData);
+            }
+        }
+
+        // Refresh data internal mesin (CMD_REFRESHDATA = 1013)
+        try {
+            await zkInstance.executeCmd(1013, '');
+        } catch (_) {}
+
+        try {
+            await zkInstance.disconnect();
+            socketCreated = false;
+        } catch (_) {}
+
+        return {
+            success: true,
+            deletedCount: matchedInternalUids.size,
+            ip: config.ip,
+            port: config.port
+        };
+    } catch (err) {
+        if (socketCreated) {
+            try {
+                await zkInstance.disconnect();
+            } catch (_) {}
+        }
+        throw err;
+    }
+}
+
 // Middleware Autentikasi Akun
 async function requireAuth(req, res, next) {
     try {
@@ -673,6 +806,9 @@ app.post('/absen', async (req, res) => {
 // CRUD Karyawan - List
 app.get('/karyawan', async (req, res) => {
     try {
+        const msg = req.query.msg || '';
+        const msgType = req.query.type || 'success';
+
         const [rows, perusahaanRows, divisiRows, strukturRows] = await Promise.all([
             dbAll(`SELECT uid, nama, COALESCE(jabatan, '') as jabatan, COALESCE(perusahaan, '') as perusahaan, COALESCE(divisi, '') as divisi FROM karyawan ORDER BY CAST(uid AS INTEGER) ASC, uid ASC`),
             dbAll(`SELECT id, nama FROM perusahaan ORDER BY id ASC`),
@@ -686,7 +822,9 @@ app.get('/karyawan', async (req, res) => {
             karyawan: rows,
             perusahaanList: perusahaanRows,
             divisiList: divisiRows,
-            strukturTree: strukturTree
+            strukturTree: strukturTree,
+            msg: msg,
+            msgType: msgType
         });
     } catch (err) {
         console.error('Gagal memuat data karyawan:', err);
@@ -747,12 +885,88 @@ app.post('/karyawan/edit/:uid', (req, res) => {
     );
 });
 
-// CRUD Karyawan - Delete
-app.get('/karyawan/delete/:uid', (req, res) => {
-    const uid = req.params.uid;
-    db.run('DELETE FROM karyawan WHERE uid = ?', [uid], () => {
-        res.redirect('/karyawan');
+// CRUD Karyawan - Delete (Database atau Mesin via Query/Link)
+app.get('/karyawan/delete/:uid', async (req, res) => {
+    const uid = (req.params.uid || '').trim();
+    const target = (req.query.target || 'database').trim().toLowerCase();
+
+    if (target === 'mesin') {
+        try {
+            const row = await dbGet('SELECT nama FROM karyawan WHERE uid = ?', [uid]);
+            const nama = row && row.nama ? row.nama : '';
+            await deleteUserFromMachine(uid, nama);
+            return res.redirect('/karyawan?msg=' + encodeURIComponent(`Karyawan ${nama ? '"' + nama + '" ' : ''}(ID: ${uid}) berhasil dihapus dari mesin absensi!`) + '&type=success');
+        } catch (err) {
+            console.error('Gagal menghapus karyawan di mesin:', err);
+            return res.redirect('/karyawan?msg=' + encodeURIComponent('Gagal menghapus karyawan di mesin: ' + err.message) + '&type=error');
+        }
+    }
+
+    db.run('DELETE FROM karyawan WHERE uid = ?', [uid], (err) => {
+        if (err) {
+            return res.redirect('/karyawan?msg=' + encodeURIComponent('Gagal menghapus karyawan dari database.') + '&type=error');
+        }
+        res.redirect('/karyawan?msg=' + encodeURIComponent(`Karyawan (ID: ${uid}) berhasil dihapus dari database!`) + '&type=success');
     });
+});
+
+// API Hapus Karyawan di Mesin Absensi
+app.post('/api/karyawan/delete-machine', async (req, res) => {
+    try {
+        const uid = String(req.body.uid || '').trim();
+        let nama = String(req.body.nama || '').trim();
+
+        if (!uid) {
+            return res.status(400).json({ success: false, message: 'ID karyawan wajib diisi.' });
+        }
+
+        if (!nama) {
+            const row = await dbGet('SELECT nama FROM karyawan WHERE uid = ?', [uid]);
+            if (row && row.nama) nama = row.nama;
+        }
+
+        const result = await deleteUserFromMachine(uid, nama);
+        res.json({
+            success: true,
+            message: `Karyawan ${nama ? '"' + nama + '" ' : ''}(ID: ${uid}) berhasil dihapus dari mesin absensi (${result.ip}:${result.port})!`
+        });
+    } catch (err) {
+        console.error('Error hapus karyawan di mesin:', err);
+        res.status(500).json({
+            success: false,
+            message: 'Gagal menghapus karyawan di mesin: ' + (err && err.message ? err.message : 'Koneksi ke mesin gagal.')
+        });
+    }
+});
+
+// API Hapus Karyawan di Database
+app.post('/api/karyawan/delete-database', async (req, res) => {
+    try {
+        const uid = String(req.body.uid || '').trim();
+        let nama = String(req.body.nama || '').trim();
+
+        if (!uid) {
+            return res.status(400).json({ success: false, message: 'ID karyawan wajib diisi.' });
+        }
+
+        if (!nama) {
+            const row = await dbGet('SELECT nama FROM karyawan WHERE uid = ?', [uid]);
+            if (row && row.nama) nama = row.nama;
+        }
+
+        await dbRun('DELETE FROM karyawan WHERE uid = ?', [uid]);
+
+        res.json({
+            success: true,
+            message: `Karyawan ${nama ? '"' + nama + '" ' : ''}(ID: ${uid}) berhasil dihapus dari database!`
+        });
+    } catch (err) {
+        console.error('Error hapus karyawan di database:', err);
+        res.status(500).json({
+            success: false,
+            message: 'Gagal menghapus karyawan dari database: ' + (err && err.message ? err.message : 'Kesalahan database.')
+        });
+    }
 });
 
 // Helper Membangun Tree Struktur Perusahaan dari Baris Database
@@ -1025,7 +1239,7 @@ app.get('/karyawan/export', async (req, res) => {
         }
 
         const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Type', 'applicationplication/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.send(buffer);
     } catch (err) {
@@ -1450,7 +1664,7 @@ app.get('/api/sync-karyawan', async (req, res) => {
     res.json(result);
 });
 
-// Sync Absensi dari Mesin (Manual & Increincremental)
+// Sync Absensi dari Mesin (Manual & Incremental)
 app.get('/api/sync-absensi', async (req, res) => {
     const config = await getMachineConfig();
     const ip = req.query.ip || config.ip;
