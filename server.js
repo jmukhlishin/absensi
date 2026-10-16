@@ -531,49 +531,68 @@ app.post('/api/restart-machine', async (req, res) => {
     }
 });
 
-// API Hapus Data Absensi (Hanya Superadmin)
+// API Hapus Data Absensi di Mesin (dan Opsi Checklist Hapus Database Lokal) - Hanya Superadmin
 app.post('/api/absensi/delete', async (req, res) => {
     try {
         if (req.user.role !== 'superadmin') {
             return res.redirect('/?msg=' + encodeURIComponent('Akses ditolak! Hanya Superadmin yang dapat menghapus data absensi.') + '&type=error');
         }
         
-        const { start_date, end_date, delete_machine } = req.body;
+        const { start_date, end_date, delete_local } = req.body;
         
         if (!start_date || !end_date) {
             return res.redirect('/?msg=' + encodeURIComponent('Tanggal mulai dan sampai harus diisi.') + '&type=error');
         }
 
-        // Hapus di database
-        await dbRun(`DELETE FROM absensi WHERE date(waktu) >= ? AND date(waktu) <= ?`, [start_date, end_date]);
-
-        let machineMsg = '';
-        if (delete_machine === '1') {
-            try {
-                const config = await getMachineConfig();
-                const zkInstance = new ZKLib(config.ip, config.port, 10000, 4000);
-                await zkInstance.createSocket();
-                
-                if (typeof zkInstance.clearAttendanceLog === 'function') {
-                    await zkInstance.clearAttendanceLog();
-                } else {
-                    // CMD_CLEAR_ATTLOG (15 pada standar ZKTeco, fallback ke 14 jika perlu)
-                    await zkInstance.executeCmd(15, '');
-                }
-                
-                try {
-                    await zkInstance.executeCmd(1013, '');
-                } catch (_) {}
-
-                try { await zkInstance.disconnect(); } catch(e) {}
-                machineMsg = ' dan seluruh log di mesin';
-            } catch (e) {
-                console.error("Gagal hapus di mesin:", e);
-                machineMsg = ' (gagal menghapus log di mesin)';
-            }
+        if (syncState.isSyncing) {
+            return res.redirect('/?msg=' + encodeURIComponent('Mesin sedang melakukan sinkronisasi data. Harap tunggu hingga selesai.') + '&type=error');
         }
-        
-        res.redirect('/?msg=' + encodeURIComponent(`Data absensi berhasil dihapus dari database${machineMsg}!`) + '&type=success');
+
+        // 1. Hapus data absensi/kehadiran di mesin absensi (utama)
+        let machineSuccess = false;
+        let machineError = '';
+        try {
+            const config = await getMachineConfig();
+            const zkInstance = new ZKLib(config.ip, config.port, 10000, 4000);
+            await zkInstance.createSocket();
+            
+            if (typeof zkInstance.clearAttendanceLog === 'function') {
+                await zkInstance.clearAttendanceLog();
+            } else {
+                // CMD_CLEAR_ATTLOG (15 pada standar ZKTeco)
+                await zkInstance.executeCmd(15, '');
+            }
+            
+            try {
+                await zkInstance.executeCmd(1013, '');
+            } catch (_) {}
+
+            try { await zkInstance.disconnect(); } catch(e) {}
+            machineSuccess = true;
+        } catch (e) {
+            console.error('Gagal hapus data absensi di mesin:', e);
+            machineError = e && e.message ? e.message : 'Koneksi ke mesin gagal';
+        }
+
+        // 2. Jika checklist hapus database lokal dipilih, hapus juga di database lokal sesuai rentang tanggal
+        let localDeleted = false;
+        if (delete_local === '1') {
+            await dbRun(`DELETE FROM absensi WHERE date(waktu) >= ? AND date(waktu) <= ?`, [start_date, end_date]);
+            localDeleted = true;
+        }
+
+        if (!machineSuccess) {
+            const extraLocalMsg = localDeleted
+                ? `, namun data di database lokal (${start_date} s/d ${end_date}) berhasil dihapus.`
+                : '.';
+            return res.redirect('/?msg=' + encodeURIComponent(`Gagal menghapus data absensi di mesin (${machineError})${extraLocalMsg}`) + '&type=error');
+        }
+
+        const successMsg = localDeleted
+            ? `Data absensi di mesin absensi serta database lokal (${start_date} s/d ${end_date}) berhasil dihapus!`
+            : `Data absensi/kehadiran di mesin absensi berhasil dihapus!`;
+
+        res.redirect('/?msg=' + encodeURIComponent(successMsg) + '&type=success');
     } catch (err) {
         console.error('Error delete absensi:', err);
         res.redirect('/?msg=' + encodeURIComponent('Gagal menghapus data absensi.') + '&type=error');
