@@ -531,6 +531,51 @@ app.post('/api/restart-machine', async (req, res) => {
     }
 });
 
+// API Hapus Data Absensi (Hanya Superadmin)
+app.post('/api/absensi/delete', async (req, res) => {
+    try {
+        if (req.user.role !== 'superadmin') {
+            return res.redirect('/?msg=' + encodeURIComponent('Akses ditolak! Hanya Superadmin yang dapat menghapus data absensi.') + '&type=error');
+        }
+        
+        const { start_date, end_date, delete_machine } = req.body;
+        
+        if (!start_date || !end_date) {
+            return res.redirect('/?msg=' + encodeURIComponent('Tanggal mulai dan sampai harus diisi.') + '&type=error');
+        }
+
+        // Hapus di database
+        await dbRun(`DELETE FROM absensi WHERE date(waktu) >= ? AND date(waktu) <= ?`, [start_date, end_date]);
+
+        let machineMsg = '';
+        if (delete_machine === '1') {
+            try {
+                const config = await getMachineConfig();
+                const zkInstance = new ZKLib(config.ip, config.port, 10000, 4000);
+                await zkInstance.createSocket();
+                
+                if (typeof zkInstance.clearAttendanceLog === 'function') {
+                    await zkInstance.clearAttendanceLog();
+                } else {
+                    // CMD_CLEAR_ATTLOG
+                    await zkInstance.executeCmd(14, ''); 
+                }
+                
+                try { await zkInstance.disconnect(); } catch(e) {}
+                machineMsg = ' dan seluruh log di mesin';
+            } catch (e) {
+                console.error("Gagal hapus di mesin:", e);
+                machineMsg = ' (gagal menghapus log di mesin)';
+            }
+        }
+        
+        res.redirect('/?msg=' + encodeURIComponent(`Data absensi berhasil dihapus dari database${machineMsg}!`) + '&type=success');
+    } catch (err) {
+        console.error('Error delete absensi:', err);
+        res.redirect('/?msg=' + encodeURIComponent('Gagal menghapus data absensi.') + '&type=error');
+    }
+});
+
 // State untuk tracking proses sinkronisasi di background (non-blocking)
 const syncState = {
     isSyncing: false,
