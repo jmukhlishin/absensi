@@ -1239,7 +1239,7 @@ app.get('/karyawan/export', async (req, res) => {
         }
 
         const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-        res.setHeader('Content-Type', 'applicationplication/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.send(buffer);
     } catch (err) {
