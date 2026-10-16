@@ -547,7 +547,7 @@ function encodeZkTime(dateStr, isEndOfDay = false) {
     const hour = isEndOfDay ? 23 : 0;
     const minute = isEndOfDay ? 59 : 0;
     const second = isEndOfDay ? 59 : 0;
-    return (((year - 2000) * 12 * 31 + ((month - 1) * 31) + (day - 1)) * 86400) + (hour * 3600) + (minute * 60) + second;
+    return (((year - 2000) * 12 * 31 + (month - 1) * 31 + (day - 1)) * 86400) + (hour * 3600) + (minute * 60) + second;
 }
 
 // API Hapus Data Absensi di Mesin Berdasarkan Rentang Waktu (dan Opsi Checklist Hapus Database Lokal) - Hanya Superadmin
@@ -596,7 +596,7 @@ app.post('/api/absensi/delete', async (req, res) => {
             await zkInstance.createSocket();
 
             const deletedRows = await dbAll(`SELECT uid, waktu FROM deleted_machine_logs`);
-            const alreadyDeletedSet = new Set(deletedRows.map(r => `${r.uid}|${r.waktu}`));
+            const alreadyDeletedSet = new Set(deletedRows.map(r => \`\${r.uid}|\${r.waktu}\`));
 
             // Baca log dari mesin terlebih dahulu untuk memisahkan log di dalam & di luar rentang waktu
             const logsResp = await zkInstance.getAttendances();
@@ -616,7 +616,7 @@ app.post('/api/absensi/delete', async (req, res) => {
                 const waktu = m.format('YYYY-MM-DD HH:mm:ss');
                 if (waktu > nowStr) continue;
 
-                const uniqueKey = `${uid}|${waktu}`;
+                const uniqueKey = \`\${uid}|\${waktu}\`;
                 if (alreadyDeletedSet.has(uniqueKey)) continue;
 
                 const logDate = waktu.slice(0, 10);
@@ -641,11 +641,11 @@ app.post('/api/absensi/delete', async (req, res) => {
                 // Amankan log di luar rentang tanggal ke database lokal sebelum membersihkan memori mesin
                 if (logsOutsideRange.length > 0) {
                     const existingLogs = await dbAll(`SELECT uid, waktu FROM absensi`);
-                    const existingLogsSet = new Set(existingLogs.map(r => `${r.uid}|${r.waktu}`));
+                    const existingLogsSet = new Set(existingLogs.map(r => \`\${r.uid}|\${r.waktu}\`));
                     logsOutsideRange.sort((a, b) => a.waktu.localeCompare(b.waktu));
 
                     for (const item of logsOutsideRange) {
-                        const key = `${item.uid}|${item.waktu}`;
+                        const key = \`\${item.uid}|\${item.waktu}\`;
                         if (!existingLogsSet.has(key)) {
                             await saveAttendanceLog(item.uid, item.waktu, 'Mesin');
                             existingLogsSet.add(key);
@@ -653,15 +653,15 @@ app.post('/api/absensi/delete', async (req, res) => {
                     }
                 }
 
-                // Kirim perintah hapus rentang waktu ke mesin; jika seluruh log aktif di mesin berada dalam rentang ini, bersihkan memori log mesin
-                const timeRangeBuf = Buffer.alloc(8);
-                timeRangeBuf.writeUInt32LE(encodeZkTime(start_date, false), 0);
-                timeRangeBuf.writeUInt32LE(encodeZkTime(end_date, true), 4);
+                // Catatan: Sebagian besar firmware mesin ZKTeco TIDAK MENDUKUNG penghapusan log absensi secara parsial 
+                // berdasarkan waktu (Command 15 selalu mengosongkan SELURUH memori terlepas dari payload yang dikirim).
+                // Oleh karena itu, jika masih ada log di luar rentang waktu (logsOutsideRange > 0),
+                // kita TIDAK BOLEH mengirimkan perintah CMD_CLEAR_ATTLOG (15) karena akan menghapus seluruh data mesin secara sepihak.
+                // Log yang berada di dalam rentang waktu sudah dicatat di database lokal (deleted_machine_logs) 
+                // sehingga sistem akan otomatis mengabaikannya ketika sinkronisasi/download data.
 
-                try {
-                    await zkInstance.executeCmd(15, timeRangeBuf);
-                } catch (_) {}
-
+                // Jika seluruh log absensi di mesin termasuk dalam rentang waktu yang dihapus (tidak ada sisa log di luar rentang),
+                // maka kita dapat dengan aman membersihkan/mengosongkan seluruh memori log mesin.
                 if (logsOutsideRange.length === 0) {
                     try {
                         if (typeof zkInstance.clearAttendanceLog === 'function') {
@@ -1541,14 +1541,14 @@ app.post('/api/upload-karyawan', async (req, res) => {
                     // Protokol ZKTeco CMD_USER_WRQ (Command 8) - Format 72 byte (standar TCP/ZKTeco)
                     const userBuf72 = Buffer.alloc(72, 0);
                     userBuf72.writeUInt16LE(uidInt & 0xFFFF, 0); // 0..1: internal UID (UInt16LE)
-                    userBuf72.writeUInt8(0, 2);                  // 2: role (0 = User biasa)
+                    userBuf72.writeUInt8(0, 2);                   // 2: role (0 = User biasa)
                     // 3..10: password (8 byte, kosong)
                     // 11..34: name (24 byte)
                     const nameBytes = Buffer.from(cleanName, 'utf8').slice(0, 23);
                     nameBytes.copy(userBuf72, 11);
-                    userBuf72.writeUInt32LE(0, 35);              // 35..38: cardno (4 byte)
-                    userBuf72.writeUInt8(1, 39);                 // 39: group (1)
-                    userBuf72.writeUInt32LE(0, 40);              // 40..43: timezone
+                    userBuf72.writeUInt32LE(0, 35);               // 35..38: cardno (4 byte)
+                    userBuf72.writeUInt8(1, 39);                  // 39: group (1)
+                    userBuf72.writeUInt32LE(0, 40);               // 40..43: timezone
                     // 48..56: userId / PIN string (maks 9 byte)
                     const pinBytes = Buffer.from(userIdStr, 'ascii').slice(0, 8);
                     pinBytes.copy(userBuf72, 48);
@@ -1772,10 +1772,10 @@ async function runSyncAbsensi(ip, machinePort = 4370) {
     try {
         // 1. Ambil semua log yang sudah ada untuk incremental sync (menghindari bug skip data karyawan baru)
         const existingLogs = await dbAll(`SELECT uid, waktu FROM absensi`);
-        const existingLogsSet = new Set(existingLogs.map(r => `${r.uid}|${r.waktu}`));
+        const existingLogsSet = new Set(existingLogs.map(r => \`\${r.uid}|\${r.waktu}\`));
 
         const deletedMachineRows = await dbAll(`SELECT uid, waktu FROM deleted_machine_logs`);
-        const deletedMachineSet = new Set(deletedMachineRows.map(r => `${r.uid}|${r.waktu}`));
+        const deletedMachineSet = new Set(deletedMachineRows.map(r => \`\${r.uid}|\${r.waktu}\`));
 
         updateSyncState({
             progress: 15,
@@ -1822,7 +1822,7 @@ async function runSyncAbsensi(ip, machinePort = 4370) {
             // Abaikan log masa depan dari mesin yang salah waktu
             if (waktu > nowStr) continue;
 
-            const uniqueKey = `${uid}|${waktu}`;
+            const uniqueKey = \`\${uid}|\${waktu}\`;
             if (deletedMachineSet.has(uniqueKey)) continue;
             if (existingLogsSet.has(uniqueKey)) continue;
             if (seenKeys.has(uniqueKey)) continue;
@@ -1854,7 +1854,7 @@ async function runSyncAbsensi(ip, machinePort = 4370) {
             progress: 50,
             total: totalNew,
             processed: 0,
-            message: `Memproses ${totalNew} data absensi baru...`
+            message: \`Memproses \${totalNew} data absensi baru...\`
         });
 
         // 3. Simpan log baru secara bertahap sesuai aturan Jam Masuk & Pulang (>= 1 jam)
@@ -1877,13 +1877,13 @@ async function runSyncAbsensi(ip, machinePort = 4370) {
                 progress: pct,
                 processed: processed,
                 added: insertedCount,
-                message: `Memproses data absensi baru (${processed}/${totalNew})...`
+                message: \`Memproses data absensi baru (\${processed}/\${totalNew})...\`
             });
 
             await yieldEventLoop();
         }
 
-        const msg = `Data absensi berhasil didownload (${insertedCount} log masuk/pulang disimpan)!`;
+        const msg = \`Data absensi berhasil didownload (\${insertedCount} log masuk/pulang disimpan)!\`;
         updateSyncState({
             isSyncing: false,
             status: 'completed',
@@ -1899,7 +1899,7 @@ async function runSyncAbsensi(ip, machinePort = 4370) {
         if (socketCreated) {
             try { await zkInstance.disconnect(); } catch (_) {}
         }
-        const errMsg = e && e.message ? `Gagal mendownload data absensi: ${e.message}` : 'Gagal koneksi ke mesin absensi.';
+        const errMsg = e && e.message ? \`Gagal mendownload data absensi: \${e.message}\` : 'Gagal koneksi ke mesin absensi.';
         updateSyncState({
             isSyncing: false,
             status: 'error',
