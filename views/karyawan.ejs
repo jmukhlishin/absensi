@@ -107,6 +107,41 @@
             color: var(--primary-blue);
         }
 
+        /* Alert Banner */
+        .alert-banner {
+            padding: 12px 16px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-weight: 600;
+            font-size: 14px;
+            display: none;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+        .alert-banner.show {
+            display: flex;
+        }
+        .alert-success {
+            background: #dcfce7;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+        }
+        .alert-error {
+            background: #fef2f2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+        }
+        .alert-close {
+            background: none;
+            border: none;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            color: inherit;
+            flex-shrink: 0;
+        }
+
         .header-bar {
             display: flex;
             justify-content: space-between;
@@ -610,7 +645,7 @@
             .modal-actions {
                 flex-direction: column-reverse;
             }
-            .btn-cancel, .btn-submit {
+            .btn-cancel, .btn-submit, .btn-delete {
                 width: 100%;
                 padding: 12px;
             }
@@ -654,6 +689,12 @@
                 </a>
                 <a href="/struktur-perusahaan" class="nav-secondary">Struktur Perusahaan</a>
             </div>
+        </div>
+
+        <!-- Alert Banner -->
+        <div id="alert-box" class="alert-banner <%= (typeof msg !== 'undefined' && msg) ? 'show ' + (typeof msgType !== 'undefined' && msgType === 'error' ? 'alert-error' : 'alert-success') : '' %>">
+            <span id="alert-text"><%= typeof msg !== 'undefined' ? msg : '' %></span>
+            <button type="button" class="alert-close" onclick="hideAlert()">&times;</button>
         </div>
         
         <h1>Manajemen Karyawan</h1>
@@ -710,7 +751,10 @@
                                         data-divisi="<%= k.divisi || '' %>"
                                         data-jabatan="<%= k.jabatan || '' %>"
                                         onclick="openEditModalFromBtn(this)">Edit</button>
-                                    <a href="/karyawan/delete/<%= k.uid %>" class="btn-delete" onclick="return confirm('Yakin ingin menghapus karyawan ini?')">Hapus</a>
+                                    <button type="button" class="btn-delete"
+                                        data-uid="<%= k.uid %>"
+                                        data-nama="<%= k.nama %>"
+                                        onclick="openDeleteOptionModalFromBtn(this)">Hapus</button>
                                 </td>
                             </tr>
                         <% }) %>
@@ -724,7 +768,58 @@
         </div>
     </div>
 
-    <!-- Modal Popup Ekspor Data Karyawan -->
+    <!-- Modal Pop-up Opsi Hapus Karyawan -->
+    <div id="delete-option-modal" class="modal-overlay" onclick="handleOverlayClick(event)">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Pilih Opsi Hapus Karyawan</h3>
+                <button type="button" class="btn-close-x" onclick="closeDeleteOptionModal()" title="Tutup">&times;</button>
+            </div>
+            <div class="modal-form">
+                <p style="margin-top:0; margin-bottom:15px; font-size:14px;">Tentukan metode penghapusan untuk karyawan <strong id="opt-del-nama"></strong> (ID: <strong id="opt-del-uid"></strong>):</p>
+                <div class="form-group">
+                    <label class="export-option-card">
+                        <input type="radio" name="delete_target" value="mesin" checked>
+                        <div class="export-option-info">
+                            <span class="export-option-title">Hapus Karyawan di Mesin</span>
+                            <span class="export-option-desc">Menghapus data karyawan/user langsung dari mesin absensi tanpa menghapus data di database lokal.</span>
+                        </div>
+                    </label>
+                    <label class="export-option-card">
+                        <input type="radio" name="delete_target" value="database">
+                        <div class="export-option-info">
+                            <span class="export-option-title">Hapus Karyawan di Database</span>
+                            <span class="export-option-desc">Menghapus data karyawan beserta absensinya dari database aplikasi lokal.</span>
+                        </div>
+                    </label>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-cancel" onclick="closeDeleteOptionModal()">Batal</button>
+                    <button type="button" class="btn-submit" onclick="openDeleteConfirmModal()">Lanjutkan</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Pop-up Konfirmasi Hapus -->
+    <div id="delete-confirm-modal" class="modal-overlay" onclick="handleOverlayClick(event)">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Konfirmasi Hapus Karyawan</h3>
+                <button type="button" class="btn-close-x" onclick="closeDeleteConfirmModal()" title="Tutup">&times;</button>
+            </div>
+            <div class="modal-form">
+                <p id="confirm-del-message" style="margin-top:0; margin-bottom:5px; font-size:15px;"></p>
+                <p id="confirm-del-note" style="margin-top:0; margin-bottom:15px; font-size:13px; color:var(--text-muted);"></p>
+                <div class="modal-actions">
+                    <button type="button" class="btn-cancel" onclick="closeDeleteConfirmModal()">Kembali</button>
+                    <button type="button" class="btn-delete" id="btn-confirm-delete" style="padding: 10px 20px; border: none; font-size: 14px; font-weight: 700; border-radius: 8px; color: white; cursor: pointer;" onclick="confirmDeleteKaryawan()">Ya, Hapus</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Pop-up Ekspor Data Karyawan -->
     <div id="export-karyawan-modal" class="modal-overlay" onclick="handleOverlayClick(event)">
         <div class="modal-card">
             <div class="modal-header">
@@ -760,7 +855,7 @@
         </div>
     </div>
 
-    <!-- Modal Popup Pilih Karyawan untuk Upload ke Mesin -->
+    <!-- Modal Pop-up Pilih Karyawan untuk Upload ke Mesin -->
     <div id="upload-select-modal" class="modal-overlay" onclick="handleOverlayClick(event)">
         <div class="modal-card modal-lg">
             <div class="modal-header">
@@ -807,7 +902,7 @@
         </div>
     </div>
 
-    <!-- Modal Popup Tambah Karyawan -->
+    <!-- Modal Pop-up Tambah Karyawan -->
     <div id="add-karyawan-modal" class="modal-overlay" onclick="handleOverlayClick(event)">
         <div class="modal-card">
             <div class="modal-header">
@@ -843,7 +938,7 @@
         </div>
     </div>
 
-    <!-- Modal Popup Edit Karyawan -->
+    <!-- Modal Pop-up Edit Karyawan -->
     <div id="edit-karyawan-modal" class="modal-overlay" onclick="handleOverlayClick(event)">
         <div class="modal-card">
             <div class="modal-header">
@@ -903,6 +998,21 @@
 
         let currentSortColumn = 'id';
         let currentSortOrder = 'asc';
+
+        // Helper fungsi Alert Banner
+        function showAlert(message, type = 'success') {
+            const box = document.getElementById('alert-box');
+            const txt = document.getElementById('alert-text');
+            if (!box || !txt) return;
+            box.className = 'alert-banner show ' + (type === 'error' ? 'alert-error' : 'alert-success');
+            txt.innerText = message;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function hideAlert() {
+            const box = document.getElementById('alert-box');
+            if (box) box.classList.remove('show');
+        }
 
         // Ambil semua perusahaan dari struktur perusahaan (dan master perusahaan)
         function getPerusahaanOptions() {
@@ -1094,8 +1204,8 @@
             const filterEmptyRow = document.getElementById('filter-empty-row');
             if (filterEmptyRow) tbody.appendChild(filterEmptyRow);
 
-            document.getElementById('sort-icon-id').innerText = '⇅';
-            document.getElementById('sort-icon-nama').innerText = '⇅';
+            document.getElementById('sort-icon-id').innerText = '⇕';
+            document.getElementById('sort-icon-nama').innerText = '⇕';
             const activeIcon = document.getElementById('sort-icon-' + column);
             if (activeIcon) {
                 activeIcon.innerText = currentSortOrder === 'asc' ? '▲' : '▼';
@@ -1162,6 +1272,96 @@
             modal.classList.remove('active');
         }
 
+        // Logic Hapus Karyawan (Opsi & Konfirmasi)
+        let targetDeleteUid = '';
+        let targetDeleteNama = '';
+
+        function openDeleteOptionModalFromBtn(btn) {
+            targetDeleteUid = btn.getAttribute('data-uid');
+            targetDeleteNama = btn.getAttribute('data-nama');
+            document.getElementById('opt-del-uid').innerText = targetDeleteUid;
+            document.getElementById('opt-del-nama').innerText = targetDeleteNama;
+            const modal = document.getElementById('delete-option-modal');
+            modal.classList.add('active');
+        }
+
+        function closeDeleteOptionModal() {
+            const modal = document.getElementById('delete-option-modal');
+            modal.classList.remove('active');
+        }
+
+        function openDeleteConfirmModal() {
+            const selectedRadio = document.querySelector('input[name="delete_target"]:checked');
+            if (!selectedRadio) return;
+            const target = selectedRadio.value;
+            
+            closeDeleteOptionModal();
+
+            const confirmMsg = document.getElementById('confirm-del-message');
+            const confirmNote = document.getElementById('confirm-del-note');
+            
+            if (target === 'mesin') {
+                confirmMsg.innerHTML = `Apakah Anda yakin ingin menghapus karyawan <strong>${targetDeleteNama}</strong> (ID: <strong>${targetDeleteUid}</strong>) dari <strong>Mesin Absensi</strong>?`;
+                confirmNote.innerHTML = 'Data karyawan akan dihapus dari mesin absensi melalui koneksi server ke mesin. Data absensi & karyawan pada database aplikasi lokal tidak akan ikut terhapus.';
+            } else {
+                confirmMsg.innerHTML = `Apakah Anda yakin ingin menghapus karyawan <strong>${targetDeleteNama}</strong> (ID: <strong>${targetDeleteUid}</strong>) dari <strong>Database</strong>?`;
+                confirmNote.innerHTML = 'Data karyawan (dan seluruh relasi log absensinya) akan dihapus secara permanen dari database lokal aplikasi.';
+            }
+
+            const btnConfirm = document.getElementById('btn-confirm-delete');
+            btnConfirm.setAttribute('data-target', target);
+            btnConfirm.innerText = 'Ya, Hapus';
+            btnConfirm.disabled = false;
+
+            const modal = document.getElementById('delete-confirm-modal');
+            modal.classList.add('active');
+        }
+
+        function closeDeleteConfirmModal() {
+            const modal = document.getElementById('delete-confirm-modal');
+            modal.classList.remove('active');
+        }
+
+        async function confirmDeleteKaryawan() {
+            const btnConfirm = document.getElementById('btn-confirm-delete');
+            const target = btnConfirm.getAttribute('data-target');
+            
+            btnConfirm.disabled = true;
+            
+            const apiEndpoint = target === 'mesin' ? '/api/karyawan/delete-machine' : '/api/karyawan/delete-database';
+            
+            if (target === 'mesin') {
+                btnConfirm.innerText = 'Menghubungkan ke mesin...';
+            } else {
+                btnConfirm.innerText = 'Menghapus...';
+            }
+
+            try {
+                const response = await fetch(apiEndpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ uid: targetDeleteUid, nama: targetDeleteNama })
+                });
+                const result = await response.json();
+                
+                closeDeleteConfirmModal();
+                
+                if (result.success) {
+                    if (target === 'database') {
+                        // Hapus row dari tabel jika dihapus dari database
+                        const row = document.querySelector(`tr[data-id="${targetDeleteUid}"]`);
+                        if (row) row.remove();
+                    }
+                    showAlert(result.message || 'Karyawan berhasil dihapus!', 'success');
+                } else {
+                    showAlert(result.message || 'Gagal menghapus karyawan.', 'error');
+                }
+            } catch (err) {
+                closeDeleteConfirmModal();
+                showAlert('Terjadi kesalahan koneksi/server.', 'error');
+            }
+        }
+
         function handleOverlayClick(e) {
             if (e.target.id === 'add-karyawan-modal') {
                 closeAddModal();
@@ -1171,6 +1371,10 @@
                 closeUploadSelectModal();
             } else if (e.target.id === 'export-karyawan-modal') {
                 closeExportModal();
+            } else if (e.target.id === 'delete-option-modal') {
+                closeDeleteOptionModal();
+            } else if (e.target.id === 'delete-confirm-modal') {
+                closeDeleteConfirmModal();
             }
         }
 
@@ -1180,6 +1384,8 @@
                 closeEditModal();
                 closeUploadSelectModal();
                 closeExportModal();
+                closeDeleteOptionModal();
+                closeDeleteConfirmModal();
             }
             if (document.body.classList.contains('upload-locked')) {
                 e.preventDefault();
@@ -1224,7 +1430,7 @@
             
             closeUploadSelectModal();
 
-            // Kunci UI dan tampilkan modal
+            // Kunci UI dan tampilkan modal progress
             document.body.classList.add('upload-locked');
             document.getElementById('upload-overlay').classList.add('active');
             document.getElementById('btn-close-upload').style.display = 'none';
@@ -1261,6 +1467,7 @@
                                 } else if (data.status === 'completed') {
                                     updateUploadProgress(100, data.message);
                                     document.getElementById('btn-close-upload').style.display = 'block';
+                                    document.getElementById('upload-title').innerText = 'Upload Selesai!';
                                 } else if (data.status === 'error') {
                                     updateUploadProgress(100, data.message, true);
                                     document.getElementById('btn-close-upload').style.display = 'block';
