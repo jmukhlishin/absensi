@@ -567,6 +567,20 @@ app.post('/api/absensi/delete', async (req, res) => {
             return res.redirect('/?msg=' + encodeURIComponent('Tanggal mulai tidak boleh lebih besar dari tanggal sampai.') + '&type=error');
         }
 
+        // Validasi rentang waktu sesuai tanggal terlama pada log absensi sampai bulan/tanggal saat ini
+        const oldestLogRow = await dbGet(`SELECT MIN(date(waktu)) as oldestDate FROM absensi`);
+        const todayDate = moment().format('YYYY-MM-DD');
+        const endOfCurrentMonth = moment().endOf('month').format('YYYY-MM-DD');
+        const minAllowedDate = (oldestLogRow && oldestLogRow.oldestDate) ? oldestLogRow.oldestDate : todayDate;
+
+        if (start_date < minAllowedDate) {
+            return res.redirect('/?msg=' + encodeURIComponent(`Tanggal mulai tidak boleh lebih lama dari tanggal log absensi terlama (${minAllowedDate}).`) + '&type=error');
+        }
+
+        if (end_date > endOfCurrentMonth) {
+            return res.redirect('/?msg=' + encodeURIComponent('Rentang tanggal tidak boleh melewati bulan saat ini.') + '&type=error');
+        }
+
         if (syncState.isSyncing) {
             return res.redirect('/?msg=' + encodeURIComponent('Mesin sedang melakukan sinkronisasi data. Harap tunggu hingga selesai.') + '&type=error');
         }
@@ -869,16 +883,19 @@ app.get('/', async (req, res) => {
 
         const { listSql, countSql, searchParam, searchTerm } = buildAbsensiQuery(search);
 
-        const [absensiData, totalRow, karyawanRow, machineConfig] = await Promise.all([
+        const [absensiData, totalRow, karyawanRow, machineConfig, oldestLogRow] = await Promise.all([
             dbAll(listSql, [...searchParam, limit, offset]),
             dbGet(countSql, searchParam),
             dbGet('SELECT COUNT(*) as total FROM karyawan'),
-            getMachineConfig()
+            getMachineConfig(),
+            dbGet('SELECT MIN(date(waktu)) as oldestDate FROM absensi')
         ]);
 
         const totalAbsensi = totalRow ? totalRow.total : 0;
         const totalPages = Math.ceil(totalAbsensi / limit) || 1;
         const totalKaryawan = karyawanRow ? karyawanRow.total : 0;
+        const todayDate = moment().format('YYYY-MM-DD');
+        const oldestAbsensiDate = (oldestLogRow && oldestLogRow.oldestDate) ? oldestLogRow.oldestDate : todayDate;
 
         const roleLabel = req.user.role === 'superadmin' ? 'Superadmin' : 'Admin';
 
@@ -894,7 +911,9 @@ app.get('/', async (req, res) => {
             totalPages: totalPages,
             searchQuery: searchTerm,
             machineIp: machineConfig.ip,
-            machinePort: machineConfig.port
+            machinePort: machineConfig.port,
+            oldestAbsensiDate: oldestAbsensiDate,
+            todayDate: todayDate
         });
     } catch (err) {
         console.error('Error rendering dashboard:', err);
@@ -928,16 +947,19 @@ app.get('/api/dashboard-summary', async (req, res) => {
 
         const { listSql, countSql, searchParam, searchTerm } = buildAbsensiQuery(search);
 
-        const [rows, totalRow, karyawanRow, lastLogRow] = await Promise.all([
+        const [rows, totalRow, karyawanRow, lastLogRow, oldestLogRow] = await Promise.all([
             dbAll(listSql, [...searchParam, limit, offset]),
             dbGet(countSql, searchParam),
             dbGet('SELECT COUNT(*) as total FROM karyawan'),
-            dbGet('SELECT MAX(waktu) as lastWaktu FROM absensi')
+            dbGet('SELECT MAX(waktu) as lastWaktu FROM absensi'),
+            dbGet('SELECT MIN(date(waktu)) as oldestDate FROM absensi')
         ]);
 
         const totalAbsensi = totalRow ? totalRow.total : 0;
         const totalPages = Math.ceil(totalAbsensi / limit) || 1;
         const totalKaryawan = karyawanRow ? karyawanRow.total : 0;
+        const todayDate = moment().format('YYYY-MM-DD');
+        const oldestAbsensiDate = (oldestLogRow && oldestLogRow.oldestDate) ? oldestLogRow.oldestDate : todayDate;
 
         res.json({
             rows,
@@ -946,7 +968,9 @@ app.get('/api/dashboard-summary', async (req, res) => {
             currentPage: page,
             totalPages,
             searchQuery: searchTerm,
-            lastWaktu: lastLogRow ? lastLogRow.lastWaktu : null
+            lastWaktu: lastLogRow ? lastLogRow.lastWaktu : null,
+            oldestAbsensiDate,
+            todayDate
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
