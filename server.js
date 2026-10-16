@@ -1281,14 +1281,25 @@ app.post('/api/upload-karyawan', async (req, res) => {
         await zkInstance.createSocket();
         res.write(JSON.stringify({ status: 'running', progress: 20, message: 'Koneksi berhasil. Memeriksa data karyawan di mesin...' }) + '\n');
 
-        // Ambil daftar user yang sudah ada di mesin untuk mengecek nama yang sama
+        // Ambil daftar user yang sudah ada di mesin untuk mengecek nama yang sama serta pemetaan UID internal mesin
         const existingMachineNames = new Set();
+        const usedInternalUids = new Set();
+        const userIdToInternalUid = new Map();
         try {
             const machineUsers = await zkInstance.getUsers();
             const machineUserList = (machineUsers && Array.isArray(machineUsers.data)) ? machineUsers.data : [];
             for (const mu of machineUserList) {
-                if (mu && mu.name) {
-                    const normName = String(mu.name).trim().toLowerCase();
+                if (!mu) continue;
+                const internalUid = parseInt(mu.uid, 10);
+                if (!isNaN(internalUid) && internalUid > 0 && internalUid <= 65535) {
+                    usedInternalUids.add(internalUid);
+                }
+                const muUserId = String(mu.userId !== undefined && mu.userId !== null ? mu.userId : '').replace(/\0/g, '').trim();
+                if (muUserId && !isNaN(internalUid) && internalUid > 0 && internalUid <= 65535) {
+                    userIdToInternalUid.set(muUserId, internalUid);
+                }
+                if (mu.name) {
+                    const normName = String(mu.name).replace(/\0/g, '').trim().toLowerCase();
                     if (normName) existingMachineNames.add(normName);
                 }
             }
@@ -1304,7 +1315,8 @@ app.post('/api/upload-karyawan', async (req, res) => {
 
         for (let i = 0; i < total; i++) {
             const u = users[i];
-            const cleanName = String(u.nama || '').trim();
+            const cleanUid = String(u.uid || '').replace(/\0/g, '').trim();
+            const cleanName = String(u.nama || '').replace(/\0/g, '').trim();
             const normName = cleanName.toLowerCase();
 
             const pct = 30 + Math.floor(((i + 1) / total) * 60);
@@ -1318,11 +1330,64 @@ app.post('/api/upload-karyawan', async (req, res) => {
             }
 
             try {
-                // Konversi uid ke int, fallback jika bukan angka murni, pastikan userid tetap string
-                let uidInt = parseInt(u.uid, 10);
-                if (isNaN(uidInt)) uidInt = Math.floor(Math.random() * 10000); // Darurat bila uid string bukan angka
-                
-                await zkInstance.setUser(uidInt, u.uid, cleanName, '', 0, 0);
+                // Tentukan internal UID (2-byte: 1..65535) yang valid dan tidak bentrok di mesin
+                let uidInt = userIdToInternalUid.get(cleanUid);
+                if (!uidInt) {
+                    const parsedUid = parseInt(cleanUid, 10);
+                    if (!isNaN(parsedUid) && parsedUid > 0 && parsedUid <= 65535 && !usedInternalUids.has(parsedUid)) {
+                        uidInt = parsedUid;
+                    } else {
+                        uidInt = 1;
+                        while (usedInternalUids.has(uidInt) && uidInt < 65535) {
+                            uidInt++;
+                        }
+                    }
+                }
+
+                const userIdStr = cleanUid || String(uidInt);
+
+                if (typeof zkInstance.setUser === 'function') {
+                    await zkInstance.setUser(uidInt, userIdStr, cleanName, '', 0, 0);
+                } else {
+                    // Protokol ZKTeco CMD_USER_WRQ (Command 8) - Format 72 byte (standar TCP/ZKTeco)
+                    const userBuf72 = Buffer.alloc(72, 0);
+                    userBuf72.writeUInt16LE(uidInt & 0xFFFF, 0); // 0..1: internal UID (UInt16LE)
+                    userBuf72.writeUInt8(0, 2);                  // 2: role (0 = User biasa)
+                    // 3..10: password (8 byte, kosong)
+                    // 11..34: name (24 byte)
+                    const nameBytes = Buffer.from(cleanName, 'utf8').slice(0, 23);
+                    nameBytes.copy(userBuf72, 11);
+                    userBuf72.writeUInt32LE(0, 35);              // 35..38: cardno (4 byte)
+                    userBuf72.writeUInt8(1, 39);                 // 39: group (1)
+                    userBuf72.writeUInt32LE(0, 40);              // 40..43: timezone
+                    // 48..56: userId / PIN string (maks 9 byte)
+                    const pinBytes = Buffer.from(userIdStr, 'ascii').slice(0, 8);
+                    pinBytes.copy(userBuf72, 48);
+
+                    const reply72 = await zkInstance.executeCmd(8, userBuf72);
+                    const ack72 = (reply72 && reply72.length >= 2) ? reply72.readUInt16LE(0) : 2000;
+
+                    // Fallback ke format 28 byte jika firmware mesin lama menolak paket 72 byte (bukan CMD_ACK_OK = 2000)
+                    if (ack72 !== 2000) {
+                        const userBuf28 = Buffer.alloc(28, 0);
+                        userBuf28.writeUInt16LE(uidInt & 0xFFFF, 0);
+                        userBuf28.writeUInt8(0, 2);
+                        const nameBytes8 = Buffer.from(cleanName, 'utf8').slice(0, 8);
+                        nameBytes8.copy(userBuf28, 8);
+                        userBuf28.writeUInt32LE(0, 16);
+                        userBuf28.writeUInt8(1, 21);
+                        userBuf28.writeUInt32LE(parseInt(userIdStr, 10) || uidInt, 24);
+
+                        const reply28 = await zkInstance.executeCmd(8, userBuf28);
+                        const ack28 = (reply28 && reply28.length >= 2) ? reply28.readUInt16LE(0) : 2000;
+                        if (ack28 !== 2000) {
+                            throw new Error(`Mesin menolak perintah simpan user (ACK: ${ack28})`);
+                        }
+                    }
+                }
+
+                usedInternalUids.add(uidInt);
+                userIdToInternalUid.set(userIdStr, uidInt);
                 successCount++;
                 if (normName) existingMachineNames.add(normName);
             } catch (e) {
@@ -1332,6 +1397,11 @@ app.post('/api/upload-karyawan', async (req, res) => {
             res.write(JSON.stringify({ status: 'running', progress: pct, message: `Mengupload ${cleanName} (${i+1}/${total})...` }) + '\n');
             await yieldEventLoop();
         }
+
+        // Refresh data internal mesin (CMD_REFRESHDATA = 1013) agar user baru langsung tersimpan & tampil di mesin
+        try {
+            await zkInstance.executeCmd(1013, '');
+        } catch (_) {}
 
         try {
             await zkInstance.disconnect();
