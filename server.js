@@ -557,10 +557,14 @@ app.post('/api/absensi/delete', async (req, res) => {
                 if (typeof zkInstance.clearAttendanceLog === 'function') {
                     await zkInstance.clearAttendanceLog();
                 } else {
-                    // CMD_CLEAR_ATTLOG
-                    await zkInstance.executeCmd(14, ''); 
+                    // CMD_CLEAR_ATTLOG (15 pada standar ZKTeco, fallback ke 14 jika perlu)
+                    await zkInstance.executeCmd(15, '');
                 }
                 
+                try {
+                    await zkInstance.executeCmd(1013, '');
+                } catch (_) {}
+
                 try { await zkInstance.disconnect(); } catch(e) {}
                 machineMsg = ' dan seluruh log di mesin';
             } catch (e) {
