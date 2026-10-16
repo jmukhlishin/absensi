@@ -758,13 +758,14 @@
 
         /* Konfirmasi Modal Custom */
         .confirm-icon {
-            color: #f59e0b;
+            color: #dc2626;
             margin-bottom: 15px;
         }
         .confirm-text {
             font-size: 16px;
             color: var(--text-dark);
             margin-bottom: 20px;
+            line-height: 1.5;
         }
 
         /* Media Queries untuk Mobile & Tablet */
@@ -1049,7 +1050,7 @@
     <!-- Modal Konfirmasi Restart Mesin -->
     <div id="restart-modal" class="account-modal-overlay" onclick="handleModalOverlayClick(event, 'restart-modal')">
         <div class="account-modal-card" style="text-align: center; max-width: 380px;">
-            <div class="confirm-icon">
+            <div class="confirm-icon" style="color: #f59e0b;">
                 <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
                     <line x1="12" y1="2" x2="12" y2="12"></line>
@@ -1064,14 +1065,17 @@
         </div>
     </div>
     
-    <!-- Modal Hapus Data Absensi -->
+    <!-- Modal Hapus Data Absensi Berdasarkan Rentang Waktu -->
     <div id="delete-absensi-modal" class="account-modal-overlay" onclick="handleModalOverlayClick(event, 'delete-absensi-modal')">
         <div class="account-modal-card">
             <div class="account-modal-header">
-                <h3>Hapus Data Absensi</h3>
+                <h3>Hapus Data Absensi di Mesin</h3>
                 <button type="button" class="btn-close-x" onclick="closeDeleteAbsensiModal()" title="Tutup">&times;</button>
             </div>
             <form class="account-form" id="delete-absensi-form" action="/api/absensi/delete" method="POST">
+                <p style="font-size: 14px; color: var(--text-muted); margin: 0 0 5px 0;">
+                    Pilih rentang tanggal data absensi/kehadiran yang ingin dihapus dari mesin absensi.
+                </p>
                 <div class="account-form-group">
                     <label for="del-start-date">Mulai Tanggal</label>
                     <input type="date" id="del-start-date" name="start_date" required>
@@ -1082,16 +1086,35 @@
                 </div>
                 <div class="account-form-group" style="flex-direction: row; align-items: flex-start; gap: 10px; margin-top: 10px;">
                     <input type="checkbox" id="del-local" name="delete_local" value="1" style="width: 20px; height: 20px; margin-top: 2px;">
-                    <label for="del-local" style="cursor: pointer; font-size: 13px; color: #dc2626; line-height: 1.4; font-weight: normal;">Saya juga ingin menghapus log kehadiran di Database Lokal sistem ini.</label>
+                    <label for="del-local" style="cursor: pointer; font-size: 13.5px; color: var(--primary-blue); line-height: 1.4; font-weight: normal;">Hapus juga data absensi pada rentang tanggal ini di <b>Database Lokal</b>.</label>
                 </div>
-                <p style="font-size: 13px; color: var(--text-muted); margin: 0; line-height: 1.4;">
-                    <b style="color: #dc2626;">Perhatian:</b> Data di mesin absensi akan dihapus <u>semuanya</u> (seluruh log tanpa batas waktu). Pilihan rentang tanggal di atas hanya berlaku untuk penghapusan di Database Lokal (jika diceklis).
-                </p>
                 <div class="account-modal-actions" style="margin-top: 20px;">
                     <button type="button" class="btn-cancel" onclick="closeDeleteAbsensiModal()">Batal</button>
-                    <button type="button" class="btn-save" style="background-color: #dc2626; color: white;" onclick="confirmDeleteAbsensi()">Hapus Data</button>
+                    <button type="button" class="btn-save" style="background-color: #dc2626; color: white;" onclick="openConfirmDeleteAbsensiModal()">Hapus Data</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Modal Konfirmasi Hapus Data Absensi -->
+    <div id="confirm-delete-absensi-modal" class="account-modal-overlay" onclick="handleModalOverlayClick(event, 'confirm-delete-absensi-modal')">
+        <div class="account-modal-card" style="text-align: center; max-width: 420px;">
+            <div class="confirm-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 6h18"></path>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    <line x1="10" y1="11" x2="10" y2="17"></line>
+                    <line x1="14" y1="11" x2="14" y2="17"></line>
+                </svg>
+            </div>
+            <h3 style="margin: 0 0 10px 0; color: var(--primary-blue);">Konfirmasi Hapus Data</h3>
+            <div class="confirm-text" id="confirm-delete-text">
+                Apakah Anda yakin ingin menghapus data absensi di mesin pada rentang tanggal tersebut?
+            </div>
+            <div class="account-modal-actions" style="justify-content: center; gap: 12px;">
+                <button type="button" class="btn-cancel" onclick="closeConfirmDeleteAbsensiModal()">Batal</button>
+                <button type="button" class="btn-save" style="background-color: #dc2626; color: white;" onclick="submitDeleteAbsensiForm()">Ya, Hapus Data</button>
+            </div>
         </div>
     </div>
     <% } %>
@@ -1223,15 +1246,44 @@
             if (modal) modal.classList.remove('active');
         }
 
-        function confirmDeleteAbsensi() {
+        function openConfirmDeleteAbsensiModal() {
             const form = document.getElementById('delete-absensi-form');
-            if (form.checkValidity()) {
-                if (confirm('Apakah Anda yakin ingin menghapus data absensi sesuai pilihan?')) {
-                    form.submit();
-                }
-            } else {
+            if (!form.checkValidity()) {
                 form.reportValidity();
+                return;
             }
+
+            const startDate = document.getElementById('del-start-date').value;
+            const endDate = document.getElementById('del-end-date').value;
+            const deleteLocal = document.getElementById('del-local').checked;
+
+            if (startDate > endDate) {
+                alert('Tanggal mulai tidak boleh lebih besar dari tanggal sampai.');
+                return;
+            }
+
+            let confirmText = `Apakah Anda yakin ingin menghapus data absensi di mesin pada rentang tanggal <b>${startDate}</b> s/d <b>${endDate}</b>?`;
+            if (deleteLocal) {
+                confirmText += `<br><br><span style="color: #dc2626; font-size: 14.5px;">*Data pada Database Lokal di rentang tersebut juga akan ikut dihapus.</span>`;
+            }
+
+            document.getElementById('confirm-delete-text').innerHTML = confirmText;
+            
+            closeDeleteAbsensiModal();
+            const confirmModal = document.getElementById('confirm-delete-absensi-modal');
+            if (confirmModal) confirmModal.classList.add('active');
+        }
+
+        function closeConfirmDeleteAbsensiModal() {
+            const confirmModal = document.getElementById('confirm-delete-absensi-modal');
+            if (confirmModal) confirmModal.classList.remove('active');
+            openDeleteAbsensiModal();
+        }
+
+        function submitDeleteAbsensiForm() {
+            const confirmModal = document.getElementById('confirm-delete-absensi-modal');
+            if (confirmModal) confirmModal.classList.remove('active');
+            document.getElementById('delete-absensi-form').submit();
         }
 
         // Dropdown Profil & Modal Profil / Tambah Admin
