@@ -127,6 +127,13 @@ const db = new sqlite3.Database(dbPath, (err) => {
                 FOREIGN KEY (uid) REFERENCES karyawan(uid)
             )`);
 
+            // Table Pencatatan Log Mesin yang Dihapus per Rentang Waktu
+            db.run(`CREATE TABLE IF NOT EXISTS deleted_machine_logs (
+                uid TEXT NOT NULL,
+                waktu TEXT NOT NULL,
+                PRIMARY KEY (uid, waktu)
+            )`);
+
             // Skema Database Struktur Perusahaan (Perusahaan, Divisi, dan Hierarki Struktur)
             db.run(`CREATE TABLE IF NOT EXISTS perusahaan (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -574,6 +581,9 @@ app.post('/api/absensi/delete', async (req, res) => {
             const zkInstance = new ZKLib(config.ip, config.port, 10000, 4000);
             await zkInstance.createSocket();
 
+            const deletedRows = await dbAll(`SELECT uid, waktu FROM deleted_machine_logs`);
+            const alreadyDeletedSet = new Set(deletedRows.map(r => `${r.uid}|${r.waktu}`));
+
             // Baca log dari mesin terlebih dahulu untuk memisahkan log di dalam & di luar rentang waktu
             const logsResp = await zkInstance.getAttendances();
             const allMachineLogs = (logsResp && Array.isArray(logsResp.data)) ? logsResp.data : [];
@@ -592,6 +602,9 @@ app.post('/api/absensi/delete', async (req, res) => {
                 const waktu = m.format('YYYY-MM-DD HH:mm:ss');
                 if (waktu > nowStr) continue;
 
+                const uniqueKey = `${uid}|${waktu}`;
+                if (alreadyDeletedSet.has(uniqueKey)) continue;
+
                 const logDate = waktu.slice(0, 10);
                 if (logDate >= start_date && logDate <= end_date) {
                     logsInRange.push({ uid, waktu });
@@ -602,39 +615,54 @@ app.post('/api/absensi/delete', async (req, res) => {
 
             deletedInMachineCount = logsInRange.length;
 
-            // Amankan log di luar rentang tanggal ke database lokal sebelum membersihkan memori mesin
-            if (logsOutsideRange.length > 0) {
-                const existingLogs = await dbAll(`SELECT uid, waktu FROM absensi`);
-                const existingLogsSet = new Set(existingLogs.map(r => `${r.uid}|${r.waktu}`));
-                logsOutsideRange.sort((a, b) => a.waktu.localeCompare(b.waktu));
+            if (deletedInMachineCount > 0) {
+                // Catat log yang dihapus pada rentang tanggal ini
+                for (const item of logsInRange) {
+                    await dbRun(
+                        `INSERT OR IGNORE INTO deleted_machine_logs (uid, waktu) VALUES (?, ?)`,
+                        [item.uid, item.waktu]
+                    );
+                }
 
-                for (const item of logsOutsideRange) {
-                    const key = `${item.uid}|${item.waktu}`;
-                    if (!existingLogsSet.has(key)) {
-                        await saveAttendanceLog(item.uid, item.waktu, 'Mesin');
-                        existingLogsSet.add(key);
+                // Amankan log di luar rentang tanggal ke database lokal sebelum membersihkan memori mesin
+                if (logsOutsideRange.length > 0) {
+                    const existingLogs = await dbAll(`SELECT uid, waktu FROM absensi`);
+                    const existingLogsSet = new Set(existingLogs.map(r => `${r.uid}|${r.waktu}`));
+                    logsOutsideRange.sort((a, b) => a.waktu.localeCompare(b.waktu));
+
+                    for (const item of logsOutsideRange) {
+                        const key = `${item.uid}|${item.waktu}`;
+                        if (!existingLogsSet.has(key)) {
+                            await saveAttendanceLog(item.uid, item.waktu, 'Mesin');
+                            existingLogsSet.add(key);
+                        }
                     }
                 }
-            }
 
-            // Kirim paket rentang waktu (start_time & end_time) dan bersihkan log kehadiran di mesin
-            const timeRangeBuf = Buffer.alloc(8);
-            timeRangeBuf.writeUInt32LE(encodeZkTime(start_date, false), 0);
-            timeRangeBuf.writeUInt32LE(encodeZkTime(end_date, true), 4);
+                // Kirim perintah hapus rentang waktu ke mesin; jika seluruh log aktif di mesin berada dalam rentang ini, bersihkan memori log mesin
+                const timeRangeBuf = Buffer.alloc(8);
+                timeRangeBuf.writeUInt32LE(encodeZkTime(start_date, false), 0);
+                timeRangeBuf.writeUInt32LE(encodeZkTime(end_date, true), 4);
 
-            try {
-                await zkInstance.executeCmd(15, timeRangeBuf);
-            } catch (_) {
-                if (typeof zkInstance.clearAttendanceLog === 'function') {
-                    await zkInstance.clearAttendanceLog();
-                } else {
-                    await zkInstance.executeCmd(15, '');
+                try {
+                    await zkInstance.executeCmd(15, timeRangeBuf);
+                } catch (_) {}
+
+                if (logsOutsideRange.length === 0) {
+                    try {
+                        if (typeof zkInstance.clearAttendanceLog === 'function') {
+                            await zkInstance.clearAttendanceLog();
+                        } else {
+                            await zkInstance.executeCmd(15, '');
+                        }
+                        await dbRun(`DELETE FROM deleted_machine_logs`);
+                    } catch (_) {}
                 }
-            }
 
-            try {
-                await zkInstance.executeCmd(1013, '');
-            } catch (_) {}
+                try {
+                    await zkInstance.executeCmd(1013, '');
+                } catch (_) {}
+            }
 
             try { await zkInstance.disconnect(); } catch (e) {}
             machineSuccess = true;
@@ -1722,6 +1750,9 @@ async function runSyncAbsensi(ip, machinePort = 4370) {
         const existingLogs = await dbAll(`SELECT uid, waktu FROM absensi`);
         const existingLogsSet = new Set(existingLogs.map(r => `${r.uid}|${r.waktu}`));
 
+        const deletedMachineRows = await dbAll(`SELECT uid, waktu FROM deleted_machine_logs`);
+        const deletedMachineSet = new Set(deletedMachineRows.map(r => `${r.uid}|${r.waktu}`));
+
         updateSyncState({
             progress: 15,
             message: 'Menghubungkan ke mesin absensi...'
@@ -1768,6 +1799,7 @@ async function runSyncAbsensi(ip, machinePort = 4370) {
             if (waktu > nowStr) continue;
 
             const uniqueKey = `${uid}|${waktu}`;
+            if (deletedMachineSet.has(uniqueKey)) continue;
             if (existingLogsSet.has(uniqueKey)) continue;
             if (seenKeys.has(uniqueKey)) continue;
             seenKeys.add(uniqueKey);
