@@ -961,6 +961,9 @@
                 <h3>Sinkronisasi Manual</h3>
                 <button type="button" class="btn-sync btn-sync-karyawan" onclick="startSync('karyawan')">Download Data Karyawan</button>
                 <button type="button" class="btn-sync btn-sync-absensi" onclick="startSync('absensi')">Download Data Absensi</button>
+                <% if (typeof user !== 'undefined' && user && user.role === 'superadmin') { %>
+                <button type="button" class="btn-sync" style="background-color: #dc2626; color: white; margin-top: 8px;" onclick="openDeleteAbsensiModal()">Hapus Data Absensi</button>
+                <% } %>
             </div>
         </div>
         
@@ -1037,7 +1040,7 @@
                 </div>
                 <div class="account-modal-actions">
                     <button type="button" class="btn-cancel" onclick="closeMachineModal()">Batal</button>
-                    <button type="submit" class="btn-save">Simpan</button>
+                    <button type="button" class="btn-save" type="submit">Simpan</button>
                 </div>
             </form>
         </div>
@@ -1058,6 +1061,34 @@
                 <button type="button" class="btn-cancel" onclick="closeRestartModal()">Batal</button>
                 <button type="button" class="btn-save" style="background-color: #dc2626; color: #fff;" onclick="executeRestartMachine()">Ya, Restart Mesin</button>
             </div>
+        </div>
+    </div>
+    
+    <!-- Modal Hapus Data Absensi -->
+    <div id="delete-absensi-modal" class="account-modal-overlay" onclick="handleModalOverlayClick(event, 'delete-absensi-modal')">
+        <div class="account-modal-card">
+            <div class="account-modal-header">
+                <h3>Hapus Data Absensi</h3>
+                <button type="button" class="btn-close-x" onclick="closeDeleteAbsensiModal()" title="Tutup">&times;</button>
+            </div>
+            <form class="account-form" id="delete-absensi-form" action="/api/absensi/delete" method="POST">
+                <div class="account-form-group">
+                    <label for="del-start-date">Mulai Tanggal</label>
+                    <input type="date" id="del-start-date" name="start_date" required>
+                </div>
+                <div class="account-form-group">
+                    <label for="del-end-date">Sampai Tanggal</label>
+                    <input type="date" id="del-end-date" name="end_date" required>
+                </div>
+                <div class="account-form-group" style="flex-direction: row; align-items: flex-start; gap: 10px; margin-top: 10px;">
+                    <input type="checkbox" id="del-machine" name="delete_machine" value="1" style="width: 20px; height: 20px; margin-top: 2px;" checked>
+                    <label for="del-machine" style="cursor: pointer; font-size: 13px; color: #dc2626; line-height: 1.4; font-weight: normal;">Hapus juga log kehadiran di Mesin (<b>Perhatian:</b> ini akan menghapus <u>semua</u> log kehadiran di mesin tanpa batasan waktu).</label>
+                </div>
+                <div class="account-modal-actions" style="margin-top: 20px;">
+                    <button type="button" class="btn-cancel" onclick="closeDeleteAbsensiModal()">Batal</button>
+                    <button type="button" class="btn-save" style="background-color: #dc2626; color: white;" onclick="confirmDeleteAbsensi()">Hapus Data</button>
+                </div>
+            </form>
         </div>
     </div>
     <% } %>
@@ -1084,7 +1115,7 @@
                 </div>
                 <div class="account-modal-actions">
                     <button type="button" class="btn-cancel" onclick="closeProfileModal()">Batal</button>
-                    <button type="submit" class="btn-save">Simpan</button>
+                    <button type="button" class="btn-save" type="submit">Simpan</button>
                 </div>
             </form>
         </div>
@@ -1113,7 +1144,7 @@
                 </div>
                 <div class="account-modal-actions">
                     <button type="button" class="btn-cancel" onclick="closeAddAdminModal()">Batal</button>
-                    <button type="submit" class="btn-save">Simpan</button>
+                    <button type="button" class="btn-save" type="submit">Simpan</button>
                 </div>
             </form>
         </div>
@@ -1176,6 +1207,27 @@
                 }
             } catch (err) {
                 showAlert('Gagal menghubungi server untuk restart mesin.', 'error');
+            }
+        }
+
+        function openDeleteAbsensiModal() {
+            const modal = document.getElementById('delete-absensi-modal');
+            if (modal) modal.classList.add('active');
+        }
+
+        function closeDeleteAbsensiModal() {
+            const modal = document.getElementById('delete-absensi-modal');
+            if (modal) modal.classList.remove('active');
+        }
+
+        function confirmDeleteAbsensi() {
+            const form = document.getElementById('delete-absensi-form');
+            if (form.checkValidity()) {
+                if (confirm('Apakah Anda yakin ingin menghapus data absensi sesuai pilihan?')) {
+                    form.submit();
+                }
+            } else {
+                form.reportValidity();
             }
         }
 
@@ -1368,17 +1420,17 @@
                     data.rows.forEach(row => {
                         const badgeClass = row.status === 'Masuk' ? 'badge-masuk' : 'badge-pulang';
                         html += `<tr>
-                                <td>${row.id}</td>
-                                <td><strong>${row.nama || 'Tidak Diketahui'}</strong></td>
-                                <td>${row.waktu}</td>
-                                <td><span class="badge-status ${badgeClass}">${row.status}</span></td>
-                            </tr>`;
+                                    <td>${row.id}</td>
+                                    <td><strong>${row.nama || 'Tidak Diketahui'}</strong></td>
+                                    <td>${row.waktu}</td>
+                                    <td><span class="badge-status ${badgeClass}">${row.status}</span></td>
+                                </tr>`;
                     });
                     tbody.innerHTML = html;
                 } else {
                     const emptyMsg = (search && search.trim())
-                        ? `Tidak ada data absensi untuk karyawan "${search.trim()}".`
-                        : 'Belum ada data absensi.';
+                            ? `Tidak ada data absensi untuk karyawan "${search.trim()}".`
+                            : 'Belum ada data absensi.';
                     tbody.innerHTML = `<tr><td colspan="4" style="text-align: center;">${emptyMsg}</td></tr>`;
                 }
 
