@@ -220,8 +220,8 @@ async function getMachineConfig() {
 // Helper koneksi & penghapusan user/karyawan di mesin absensi (ZKTeco protocol CMD_DELETE_USER = 18)
 async function deleteUserFromMachine(targetUid, targetNama = '') {
     const cleanUid = String(targetUid || '').replace(/\0/g, '').trim();
-    const cleanName = String(targetNama || '').replace(/\0/g, '').trim();
-    if (!cleanUid && !cleanName) {
+    const cleanNama = String(targetNama || '').replace(/\0/g, '').trim();
+    if (!cleanUid && !cleanNama) {
         throw new Error('ID atau nama karyawan tidak valid.');
     }
 
@@ -245,7 +245,7 @@ async function deleteUserFromMachine(targetUid, targetNama = '') {
 
         const machineUserList = usersResp.data;
         const matchedInternalUids = new Set();
-        const targetNameLower = cleanName.toLowerCase();
+        const targetNameLower = cleanNama.toLowerCase();
         const defaultUserLabel = `user ${cleanUid}`.toLowerCase();
 
         // Normalisasi data user dari mesin (bersihkan null-byte bawaan buffer ZKTeco)
@@ -310,7 +310,7 @@ async function deleteUserFromMachine(targetUid, targetNama = '') {
         // Jika ID maupun Nama karyawan tidak ditemukan di mesin, keluarkan error khusus agar muncul notifikasi
         if (matchedInternalUids.size === 0) {
             const notFoundErr = new Error(
-                `Karyawan ${cleanName ? '"' + cleanName + '" ' : ''}(ID: ${cleanUid || '-'}) tidak ada di dalam mesin absensi (sudah dihapus sebelumnya atau belum terdaftar di mesin).`
+                `Karyawan ${cleanNama ? '"' + cleanNama + '" ' : ''}(ID: ${cleanUid || '-'}) tidak ada di dalam mesin absensi (sudah dihapus sebelumnya atau belum terdaftar di mesin).`
             );
             notFoundErr.code = 'USER_NOT_FOUND_IN_MACHINE';
             throw notFoundErr;
@@ -662,7 +662,6 @@ app.post('/api/absensi/delete', async (req, res) => {
                         } else {
                             await zkInstance.executeCmd(15, '');
                         }
-                        await dbRun(`DELETE FROM deleted_machine_logs`);
                     } catch (_) {}
                 }
 
@@ -681,6 +680,13 @@ app.post('/api/absensi/delete', async (req, res) => {
         // 2. Jika checklist hapus database lokal dipilih, hapus juga di database lokal sesuai rentang tanggal
         let localDeleted = false;
         if (delete_local === '1') {
+            const localRowsToDelete = await dbAll(`SELECT uid, waktu FROM absensi WHERE date(waktu) >= ? AND date(waktu) <= ?`, [start_date, end_date]);
+            for (const item of localRowsToDelete) {
+                await dbRun(
+                    `INSERT OR IGNORE INTO deleted_machine_logs (uid, waktu) VALUES (?, ?)`,
+                    [item.uid, item.waktu]
+                );
+            }
             await dbRun(`DELETE FROM absensi WHERE date(waktu) >= ? AND date(waktu) <= ?`, [start_date, end_date]);
             localDeleted = true;
         }
@@ -700,6 +706,117 @@ app.post('/api/absensi/delete', async (req, res) => {
     } catch (err) {
         console.error('Error delete absensi:', err);
         res.redirect('/?msg=' + encodeURIComponent('Gagal menghapus data absensi.') + '&type=error');
+    }
+});
+
+// API Kembalikan Data Absensi yang Sebelumnya Dihapus di Mesin - Hanya Superadmin
+app.post('/api/absensi/restore', async (req, res) => {
+    try {
+        if (req.user.role !== 'superadmin') {
+            return res.redirect('/?msg=' + encodeURIComponent('Akses ditolak! Hanya Superadmin yang dapat mengembalikan data absensi.') + '&type=error');
+        }
+
+        if (syncState.isSyncing) {
+            return res.redirect('/?msg=' + encodeURIComponent('Mesin sedang melakukan sinkronisasi data. Harap tunggu hingga selesai.') + '&type=error');
+        }
+
+        const { start_date, end_date } = req.body;
+
+        let deletedQuery = `SELECT uid, waktu FROM deleted_machine_logs`;
+        const deletedParams = [];
+
+        if (start_date && end_date) {
+            if (start_date > end_date) {
+                return res.redirect('/?msg=' + encodeURIComponent('Tanggal mulai tidak boleh lebih besar dari tanggal sampai.') + '&type=error');
+            }
+            deletedQuery += ` WHERE date(waktu) >= ? AND date(waktu) <= ?`;
+            deletedParams.push(start_date, end_date);
+        }
+
+        const deletedLogs = await dbAll(deletedQuery, deletedParams);
+
+        // Hapus catatan tombstone pada deleted_machine_logs agar log yang sebelumnya dihapus diizinkan kembali
+        if (start_date && end_date) {
+            await dbRun(`DELETE FROM deleted_machine_logs WHERE date(waktu) >= ? AND date(waktu) <= ?`, [start_date, end_date]);
+        } else {
+            await dbRun(`DELETE FROM deleted_machine_logs`);
+        }
+
+        // Gabungkan kandidat pemulihan dari catatan deleted_machine_logs serta pembacaan ulang dari mesin
+        const candidateMap = new Map();
+        for (const item of deletedLogs) {
+            if (!item || !item.uid || !item.waktu) continue;
+            candidateMap.set(`${item.uid}|${item.waktu}`, { uid: item.uid, waktu: item.waktu });
+        }
+
+        // Coba baca juga dari mesin jika log fisik masih tersimpan di memori mesin
+        try {
+            const config = await getMachineConfig();
+            const zkInstance = new ZKLib(config.ip, config.port, 10000, 4000);
+            await zkInstance.createSocket();
+            const logsResp = await zkInstance.getAttendances();
+            try { await zkInstance.disconnect(); } catch (_) {}
+
+            const allMachineLogs = (logsResp && Array.isArray(logsResp.data)) ? logsResp.data : [];
+            const nowStr = moment().format('YYYY-MM-DD HH:mm:ss');
+            const remainingDeletedRows = await dbAll(`SELECT uid, waktu FROM deleted_machine_logs`);
+            const remainingDeletedSet = new Set(remainingDeletedRows.map(r => `${r.uid}|${r.waktu}`));
+
+            for (const log of allMachineLogs) {
+                if (!log || !log.recordTime) continue;
+                const uid = String(log.deviceUserId || log.userId || log.uid || '').trim();
+                if (!uid) continue;
+
+                const m = moment(log.recordTime);
+                if (!m.isValid()) continue;
+                const waktu = m.format('YYYY-MM-DD HH:mm:ss');
+                if (waktu > nowStr) continue;
+
+                const logDate = waktu.slice(0, 10);
+                if (start_date && end_date && (logDate < start_date || logDate > end_date)) {
+                    continue;
+                }
+
+                const key = `${uid}|${waktu}`;
+                if (remainingDeletedSet.has(key)) continue;
+
+                candidateMap.set(key, { uid, waktu });
+            }
+        } catch (machineErr) {
+            console.error('Info koneksi mesin saat restore absensi:', machineErr.message);
+        }
+
+        const existingLogs = await dbAll(`SELECT uid, waktu FROM absensi`);
+        const existingSet = new Set(existingLogs.map(r => `${r.uid}|${r.waktu}`));
+
+        const logsToRestore = [];
+        for (const [key, item] of candidateMap.entries()) {
+            if (!existingSet.has(key)) {
+                logsToRestore.push(item);
+            }
+        }
+
+        logsToRestore.sort((a, b) => a.waktu.localeCompare(b.waktu));
+
+        let restoredCount = 0;
+        for (const item of logsToRestore) {
+            const resSave = await saveAttendanceLog(item.uid, item.waktu, 'Mesin');
+            if (resSave && resSave.changes > 0) {
+                restoredCount++;
+            }
+        }
+
+        if (deletedLogs.length === 0 && restoredCount === 0) {
+            return res.redirect('/?msg=' + encodeURIComponent('Tidak ditemukan riwayat data absensi yang dihapus sebelumnya.') + '&type=error');
+        }
+
+        const rangeText = (start_date && end_date) ? ` pada rentang ${start_date} s/d ${end_date}` : '';
+        const successMsg = `Data absensi yang sebelumnya dihapus di mesin${rangeText} berhasil dikembalikan (${restoredCount} data absensi dipulihkan, ${deletedLogs.length} catatan penghapusan dibersihkan)!`;
+
+        res.redirect('/?msg=' + encodeURIComponent(successMsg) + '&type=success');
+    } catch (err) {
+        console.error('Error restore absensi:', err);
+        res.redirect('/?msg=' + encodeURIComponent('Gagal mengembalikan data absensi yang dihapus.') + '&type=error');
     }
 });
 
@@ -876,17 +993,19 @@ app.get('/', async (req, res) => {
 
         const { listSql, countSql, searchParam, searchTerm } = buildAbsensiQuery(search);
 
-        const [absensiData, totalRow, karyawanRow, machineConfig, oldestLogRow] = await Promise.all([
+        const [absensiData, totalRow, karyawanRow, machineConfig, oldestLogRow, deletedCountRow] = await Promise.all([
             dbAll(listSql, [...searchParam, limit, offset]),
             dbGet(countSql, searchParam),
             dbGet('SELECT COUNT(*) as total FROM karyawan'),
             getMachineConfig(),
-            dbGet('SELECT MIN(date(waktu)) as oldestDate FROM absensi')
+            dbGet('SELECT MIN(date(waktu)) as oldestDate FROM absensi'),
+            dbGet('SELECT COUNT(*) as total FROM deleted_machine_logs')
         ]);
 
         const totalAbsensi = totalRow ? totalRow.total : 0;
         const totalPages = Math.ceil(totalAbsensi / limit) || 1;
         const totalKaryawan = karyawanRow ? karyawanRow.total : 0;
+        const totalDeletedLogs = deletedCountRow ? deletedCountRow.total : 0;
         const todayDate = moment().format('YYYY-MM-DD');
         const oldestAbsensiDate = (oldestLogRow && oldestLogRow.oldestDate) ? oldestLogRow.oldestDate : todayDate;
 
@@ -896,6 +1015,7 @@ app.get('/', async (req, res) => {
             data: absensiData,
             totalKaryawan: totalKaryawan,
             totalAbsensi: totalAbsensi,
+            totalDeletedLogs: totalDeletedLogs,
             admin: `${req.user.nama} (${roleLabel})`,
             user: req.user,
             msg: msg,
@@ -940,17 +1060,19 @@ app.get('/api/dashboard-summary', async (req, res) => {
 
         const { listSql, countSql, searchParam, searchTerm } = buildAbsensiQuery(search);
 
-        const [rows, totalRow, karyawanRow, lastLogRow, oldestLogRow] = await Promise.all([
+        const [rows, totalRow, karyawanRow, lastLogRow, oldestLogRow, deletedCountRow] = await Promise.all([
             dbAll(listSql, [...searchParam, limit, offset]),
             dbGet(countSql, searchParam),
             dbGet('SELECT COUNT(*) as total FROM karyawan'),
             dbGet('SELECT MAX(waktu) as lastWaktu FROM absensi'),
-            dbGet('SELECT MIN(date(waktu)) as oldestDate FROM absensi')
+            dbGet('SELECT MIN(date(waktu)) as oldestDate FROM absensi'),
+            dbGet('SELECT COUNT(*) as total FROM deleted_machine_logs')
         ]);
 
         const totalAbsensi = totalRow ? totalRow.total : 0;
         const totalPages = Math.ceil(totalAbsensi / limit) || 1;
         const totalKaryawan = karyawanRow ? karyawanRow.total : 0;
+        const totalDeletedLogs = deletedCountRow ? deletedCountRow.total : 0;
         const todayDate = moment().format('YYYY-MM-DD');
         const oldestAbsensiDate = (oldestLogRow && oldestLogRow.oldestDate) ? oldestLogRow.oldestDate : todayDate;
 
@@ -958,6 +1080,7 @@ app.get('/api/dashboard-summary', async (req, res) => {
             rows,
             totalAbsensi,
             totalKaryawan,
+            totalDeletedLogs,
             currentPage: page,
             totalPages,
             searchQuery: searchTerm,
@@ -1534,14 +1657,14 @@ app.post('/api/upload-karyawan', async (req, res) => {
                     // Protokol ZKTeco CMD_USER_WRQ (Command 8) - Format 72 byte (standar TCP/ZKTeco)
                     const userBuf72 = Buffer.alloc(72, 0);
                     userBuf72.writeUInt16LE(uidInt & 0xFFFF, 0); // 0..1: internal UID (UInt16LE)
-                    userBuf72.writeUInt8(0, 2);                   // 2: role (0 = User biasa)
+                    userBuf72.writeUInt8(0, 2);                  // 2: role (0 = User biasa)
                     // 3..10: password (8 byte, kosong)
                     // 11..34: name (24 byte)
                     const nameBytes = Buffer.from(cleanName, 'utf8').slice(0, 23);
                     nameBytes.copy(userBuf72, 11);
-                    userBuf72.writeUInt32LE(0, 35);               // 35..38: cardno (4 byte)
-                    userBuf72.writeUInt8(1, 39);                  // 39: group (1)
-                    userBuf72.writeUInt32LE(0, 40);               // 40..43: timezone
+                    userBuf72.writeUInt32LE(0, 35);              // 35..38: cardno (4 byte)
+                    userBuf72.writeUInt8(1, 39);                 // 39: group (1)
+                    userBuf72.writeUInt32LE(0, 40);              // 40..43: timezone
                     // 48..56: userId / PIN string (maks 9 byte)
                     const pinBytes = Buffer.from(userIdStr, 'ascii').slice(0, 8);
                     pinBytes.copy(userBuf72, 48);
