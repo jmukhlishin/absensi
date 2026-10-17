@@ -59,6 +59,7 @@
             border-left: 5px solid var(--primary-yellow);
             padding-left: 12px;
             margin-bottom: 0;
+            white-space: nowrap;
         }
         .nav {
             margin-bottom: 24px;
@@ -68,7 +69,7 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
             gap: 10px;
             box-shadow: 0 4px 12px rgba(13, 71, 161, 0.18);
         }
@@ -76,7 +77,14 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+        }
+        .nav-links::-webkit-scrollbar {
+            display: none;
         }
         .nav a {
             text-decoration: none;
@@ -91,6 +99,8 @@
             gap: 8px;
             transition: all 0.2s ease;
             box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+            white-space: nowrap;
+            flex-shrink: 0;
         }
         .nav a:hover {
             background: #ffd54f;
@@ -170,7 +180,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
             gap: 10px;
             margin-bottom: 14px;
         }
@@ -191,6 +201,7 @@
             justify-content: center;
             gap: 5px;
             white-space: nowrap;
+            flex-shrink: 0;
         }
         .btn-add:hover {
             background-color: #ffb300;
@@ -213,6 +224,7 @@
             justify-content: center;
             gap: 8px;
             white-space: nowrap;
+            flex-shrink: 0;
         }
         .btn-save-structure:hover {
             background: var(--primary-yellow);
@@ -328,6 +340,7 @@
             gap: 3px;
             transition: all 0.15s ease;
             white-space: nowrap;
+            flex-shrink: 0;
         }
         .btn-to-tree:hover {
             background: var(--primary-blue);
@@ -346,6 +359,7 @@
             display: inline-block;
             transition: all 0.15s ease;
             white-space: nowrap;
+            flex-shrink: 0;
         }
         .btn-del-small:hover {
             background: #dc2626;
@@ -673,10 +687,10 @@
         /* Optimasi Tampilan Tablet (<= 1024px) */
         @media (max-width: 1024px) {
             body {
-                padding: 16px;
+                padding: 14px;
             }
             .container {
-                padding: 22px 18px;
+                padding: 20px 16px;
             }
             .split-layout {
                 grid-template-columns: 1fr;
@@ -684,8 +698,8 @@
             }
             .left-panel {
                 display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-                gap: 18px;
+                grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+                gap: 16px;
             }
             .right-panel {
                 min-height: 400px;
@@ -698,61 +712,77 @@
             }
         }
 
-        /* Optimasi Tampilan HP / Mobile (<= 768px) */
+        /* Optimasi Tampilan HP / Mobile (<= 768px) agar Fit dan Menu/Tombol Tidak Pindah ke Bawah */
         @media (max-width: 768px) {
             body {
-                padding: 10px;
+                padding: 8px;
             }
             .container {
-                padding: 16px 12px;
+                padding: 14px 10px;
                 border-radius: 12px;
             }
             h1 {
-                font-size: 21px;
-                margin-bottom: 18px;
+                font-size: 20px;
+                margin-bottom: 14px;
             }
             h2 {
-                font-size: 16px;
+                font-size: 13.5px;
+                padding-left: 8px;
             }
             .nav {
-                padding: 12px;
-                margin-bottom: 18px;
+                padding: 10px 12px;
+                margin-bottom: 16px;
+                gap: 8px;
             }
             .nav-links {
                 width: 100%;
-                flex-direction: column;
-                align-items: stretch;
-                gap: 8px;
+                flex-direction: row;
+                flex-wrap: nowrap;
+                align-items: center;
+                gap: 6px;
             }
             .nav a {
-                width: 100%;
+                width: auto;
                 justify-content: center;
-                padding: 10px 14px;
-                font-size: 13.5px;
+                padding: 7px 11px;
+                font-size: 12px;
+                gap: 5px;
+            }
+            .nav a svg {
+                width: 15px;
+                height: 15px;
             }
             .left-panel {
                 grid-template-columns: 1fr;
-                gap: 16px;
+                gap: 14px;
             }
             .panel-card {
-                padding: 14px;
+                padding: 12px;
             }
             .panel-header {
-                flex-direction: column;
-                align-items: stretch;
-                gap: 10px;
+                flex-direction: row;
+                flex-wrap: nowrap;
+                align-items: center;
+                justify-content: space-between;
+                gap: 8px;
             }
             .btn-add, .btn-save-structure {
                 justify-content: center;
-                width: 100%;
-                padding: 10px 14px;
+                width: auto;
+                padding: 6px 10px;
+                font-size: 11.5px;
+                gap: 4px;
+            }
+            .btn-save-structure svg {
+                width: 13px;
+                height: 13px;
             }
             .table-responsive {
                 max-height: 250px;
             }
             th, td {
-                padding: 9px 10px;
-                font-size: 13px;
+                padding: 8px 9px;
+                font-size: 12px;
             }
             .structure-dropzone {
                 min-height: 300px;
@@ -775,10 +805,10 @@
                 padding: 12px;
             }
             .company-title {
-                font-size: 14.5px;
+                font-size: 14px;
             }
             .division-title {
-                font-size: 13.5px;
+                font-size: 13px;
             }
             .tree-children {
                 margin: 10px 0 0 10px;
@@ -794,21 +824,23 @@
                 top: 18px;
             }
             .modal-card {
-                padding: 20px 16px;
+                padding: 18px 14px;
             }
             .modal-actions {
-                flex-direction: column-reverse;
+                flex-direction: row;
+                flex-wrap: nowrap;
+                justify-content: flex-end;
             }
             .modal-actions button {
-                width: 100%;
+                width: auto;
             }
         }
 
         /* Layar HP Kecil (<= 420px) */
         @media (max-width: 420px) {
             th, td {
-                padding: 8px;
-                font-size: 12.5px;
+                padding: 7px 6px;
+                font-size: 11.5px;
             }
             .tree-children {
                 margin-left: 6px;
@@ -819,8 +851,13 @@
                 width: 9px;
             }
             .action-cell-group {
-                flex-direction: column;
+                flex-direction: row;
+                flex-wrap: nowrap;
                 gap: 4px;
+            }
+            .btn-to-tree, .btn-del-small {
+                padding: 4px 6px;
+                font-size: 10.5px;
             }
         }
     </style>
