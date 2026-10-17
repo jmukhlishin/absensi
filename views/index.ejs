@@ -557,6 +557,7 @@
             align-items: center;
             justify-content: center;
             gap: 6px;
+            text-decoration: none;
         }
         .btn-sync-karyawan {
             background: var(--secondary-blue);
@@ -573,13 +574,29 @@
         .btn-sync-absensi:hover {
             background: #ffb300;
         }
-        .btn-restore-absensi {
-            background-color: #16a34a;
-            color: white;
+        .db-actions-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
             margin-top: 8px;
         }
-        .btn-restore-absensi:hover {
-            background-color: #15803d;
+        .btn-backup-db {
+            background-color: #0d9488;
+            color: white;
+            font-size: 13px;
+            padding: 9px 8px;
+        }
+        .btn-backup-db:hover {
+            background-color: #0f766e;
+        }
+        .btn-import-db {
+            background-color: #4f46e5;
+            color: white;
+            font-size: 13px;
+            padding: 9px 8px;
+        }
+        .btn-import-db:hover {
+            background-color: #4338ca;
         }
 
         .table-container {
@@ -976,7 +993,10 @@
                 <button type="button" class="btn-sync btn-sync-absensi" onclick="startSync('absensi')">Download Data Absensi</button>
                 <% if (typeof user !== 'undefined' && user && user.role === 'superadmin') { %>
                 <button type="button" class="btn-sync" style="background-color: #dc2626; color: white; margin-top: 8px;" onclick="openDeleteAbsensiModal()">Hapus Data Absensi</button>
-                <button type="button" class="btn-sync btn-restore-absensi" onclick="openRestoreAbsensiModal()">Kembalikan Data Absensi</button>
+                <div class="db-actions-row">
+                    <a href="/api/database/backup" class="btn-sync btn-backup-db" title="Download Backup absensi.db ke Komputer">Backup Database</a>
+                    <button type="button" class="btn-sync btn-import-db" onclick="openImportDbModal()" title="Impor / Restore absensi.db dari Komputer">Impor Database</button>
+                </div>
                 <% } %>
             </div>
         </div>
@@ -1054,7 +1074,7 @@
                 </div>
                 <div class="account-modal-actions">
                     <button type="button" class="btn-cancel" onclick="closeMachineModal()">Batal</button>
-                    <button type="button" class="btn-save" type="submit">Simpan</button>
+                    <button type="submit" class="btn-save">Simpan</button>
                 </div>
             </form>
         </div>
@@ -1078,7 +1098,7 @@
         </div>
     </div>
     
-    <!-- Modal Hapus Data Absensi Berdasarkan Rentang Waktu -->
+    <!-- Modal Hapus Semua Data Absensi di Mesin -->
     <div id="delete-absensi-modal" class="account-modal-overlay" onclick="handleModalOverlayClick(event, 'delete-absensi-modal')">
         <div class="account-modal-card">
             <div class="account-modal-header">
@@ -1086,24 +1106,16 @@
                 <button type="button" class="btn-close-x" onclick="closeDeleteAbsensiModal()" title="Tutup">&times;</button>
             </div>
             <form class="account-form" id="delete-absensi-form" action="/api/absensi/delete" method="POST">
-                <p style="font-size: 14px; color: var(--text-muted); margin: 0 0 5px 0;">
-                    Pilih rentang tanggal data absensi/kehadiran yang ingin dihapus dari mesin absensi.
+                <p style="font-size: 14.5px; color: var(--text-dark); margin: 0 0 6px 0; line-height: 1.5;">
+                    Fitur ini akan menghapus <b>seluruh data log absensi/kehadiran</b> yang tersimpan di dalam memori mesin absensi.
                 </p>
-                <div class="account-form-group">
-                    <label for="del-start-date">Mulai Tanggal</label>
-                    <input type="date" id="del-start-date" name="start_date" min="<%= typeof oldestAbsensiDate !== 'undefined' ? oldestAbsensiDate : '' %>" max="<%= typeof todayDate !== 'undefined' ? todayDate : '' %>" onchange="onDeleteDateChange('start')" oninput="onDeleteDateChange('start')" required>
-                </div>
-                <div class="account-form-group">
-                    <label for="del-end-date">Sampai Tanggal</label>
-                    <input type="date" id="del-end-date" name="end_date" min="<%= typeof oldestAbsensiDate !== 'undefined' ? oldestAbsensiDate : '' %>" max="<%= typeof todayDate !== 'undefined' ? todayDate : '' %>" onchange="onDeleteDateChange('end')" oninput="onDeleteDateChange('end')" required>
-                </div>
-                <div class="account-form-group" style="flex-direction: row; align-items: flex-start; gap: 10px; margin-top: 10px;">
+                <div class="account-form-group" style="flex-direction: row; align-items: flex-start; gap: 10px; margin-top: 6px;">
                     <input type="checkbox" id="del-local" name="delete_local" value="1" style="width: 20px; height: 20px; margin-top: 2px;">
-                    <label for="del-local" style="cursor: pointer; font-size: 13.5px; color: var(--primary-blue); line-height: 1.4; font-weight: normal;">Hapus juga data absensi pada rentang tanggal ini di <b>Database Lokal</b>.</label>
+                    <label for="del-local" style="cursor: pointer; font-size: 13.5px; color: var(--primary-blue); line-height: 1.4; font-weight: normal;">Hapus juga seluruh data absensi di <b>Database Lokal</b>.</label>
                 </div>
                 <div class="account-modal-actions" style="margin-top: 20px;">
                     <button type="button" class="btn-cancel" onclick="closeDeleteAbsensiModal()">Batal</button>
-                    <button type="button" class="btn-save" style="background-color: #dc2626; color: white;" onclick="openConfirmDeleteAbsensiModal()">Hapus Data</button>
+                    <button type="button" class="btn-save" style="background-color: #dc2626; color: white;" onclick="openConfirmDeleteAbsensiModal()">Hapus Semua Data</button>
                 </div>
             </form>
         </div>
@@ -1122,7 +1134,7 @@
             </div>
             <h3 style="margin: 0 0 10px 0; color: var(--primary-blue);">Konfirmasi Hapus Data</h3>
             <div class="confirm-text" id="confirm-delete-text">
-                Apakah Anda yakin ingin menghapus data absensi di mesin pada rentang tanggal tersebut?
+                Apakah Anda yakin ingin menghapus seluruh data absensi di mesin?
             </div>
             <div class="account-modal-actions" style="justify-content: center; gap: 12px;">
                 <button type="button" class="btn-cancel" onclick="closeConfirmDeleteAbsensiModal()">Batal</button>
@@ -1131,34 +1143,24 @@
         </div>
     </div>
 
-    <!-- Modal Kembalikan Data Absensi yang Sebelumnya Dihapus di Mesin -->
-    <div id="restore-absensi-modal" class="account-modal-overlay" onclick="handleModalOverlayClick(event, 'restore-absensi-modal')">
-        <div class="account-modal-card" style="text-align: center; max-width: 440px;">
-            <div class="confirm-icon" style="color: #16a34a;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
-                    <path d="M3 3v5h5"></path>
-                </svg>
+    <!-- Modal Impor / Restore Database (.db) -->
+    <div id="import-db-modal" class="account-modal-overlay" onclick="handleModalOverlayClick(event, 'import-db-modal')">
+        <div class="account-modal-card">
+            <div class="account-modal-header">
+                <h3>Impor / Restore Database (.db)</h3>
+                <button type="button" class="btn-close-x" onclick="closeImportDbModal()" title="Tutup">&times;</button>
             </div>
-            <h3 style="margin: 0 0 10px 0; color: var(--primary-blue);">Kembalikan Data Absensi</h3>
-            <form class="account-form" id="restore-absensi-form" action="/api/absensi/restore" method="POST">
-                <div class="confirm-text" style="font-size: 14.5px; margin-bottom: 10px;">
-                    Fitur ini akan mengembalikan data absensi yang sebelumnya dihapus di mesin agar dapat tampil dan disinkronkan kembali.
-                    <div id="restore-deleted-count-info" style="margin-top: 8px; font-weight: 700; color: #16a34a;">
-                        Tersimpan: <span id="deleted-logs-count-badge"><%= typeof totalDeletedLogs !== 'undefined' ? totalDeletedLogs : 0 %></span> log yang pernah dihapus.
-                    </div>
-                </div>
+            <form class="account-form" id="import-db-form" onsubmit="submitImportDatabase(event)">
+                <p style="font-size: 14px; color: var(--text-muted); margin: 0; line-height: 1.5;">
+                    Pilih file backup database SQLite (<b>.db</b>) dari komputer Anda untuk memulihkan seluruh data absensi dan karyawan.
+                </p>
                 <div class="account-form-group">
-                    <label for="restore-start-date">Mulai Tanggal (Opsional - kosongkan untuk semua)</label>
-                    <input type="date" id="restore-start-date" name="start_date">
+                    <label for="import-db-file">File Database (.db)</label>
+                    <input type="file" id="import-db-file" accept=".db,.sqlite,.sqlite3" required>
                 </div>
-                <div class="account-form-group">
-                    <label for="restore-end-date">Sampai Tanggal (Opsional - kosongkan untuk semua)</label>
-                    <input type="date" id="restore-end-date" name="end_date">
-                </div>
-                <div class="account-modal-actions" style="justify-content: center; gap: 12px; margin-top: 16px;">
-                    <button type="button" class="btn-cancel" onclick="closeRestoreAbsensiModal()">Batal</button>
-                    <button type="submit" class="btn-save" style="background-color: #16a34a; color: white;">Ya, Kembalikan Data</button>
+                <div class="account-modal-actions" style="margin-top: 12px;">
+                    <button type="button" class="btn-cancel" onclick="closeImportDbModal()">Batal</button>
+                    <button type="submit" class="btn-save" id="btn-submit-import-db" style="background-color: #4f46e5; color: white;">Impor Database</button>
                 </div>
             </form>
         </div>
@@ -1187,7 +1189,7 @@
                 </div>
                 <div class="account-modal-actions">
                     <button type="button" class="btn-cancel" onclick="closeProfileModal()">Batal</button>
-                    <button type="button" class="btn-save" type="submit">Simpan</button>
+                    <button type="submit" class="btn-save">Simpan</button>
                 </div>
             </form>
         </div>
@@ -1216,7 +1218,7 @@
                 </div>
                 <div class="account-modal-actions">
                     <button type="button" class="btn-cancel" onclick="closeAddAdminModal()">Batal</button>
-                    <button type="button" class="btn-save" type="submit">Simpan</button>
+                    <button type="submit" class="btn-save">Simpan</button>
                 </div>
             </form>
         </div>
@@ -1239,68 +1241,7 @@
     <script>
         let currentPageActivePage = <%= currentPage || 1 %>;
         let currentSearchQuery = <%- JSON.stringify(typeof searchQuery !== 'undefined' ? searchQuery : '') %>;
-        let oldestAbsensiDateBound = <%- JSON.stringify(typeof oldestAbsensiDate !== 'undefined' ? oldestAbsensiDate : '') %>;
-        let todayDateBound = <%- JSON.stringify(typeof todayDate !== 'undefined' ? todayDate : '') %>;
         let searchDebounceTimer = null;
-
-        function applyDeleteDateBounds() {
-            const startInput = document.getElementById('del-start-date');
-            const endInput = document.getElementById('del-end-date');
-            if (!startInput || !endInput) return;
-
-            const minDate = oldestAbsensiDateBound || todayDateBound;
-            const maxDate = todayDateBound || oldestAbsensiDateBound;
-
-            if (minDate) {
-                startInput.min = minDate;
-                endInput.min = (startInput.value && startInput.value >= minDate) ? startInput.value : minDate;
-            }
-            if (maxDate) {
-                endInput.max = maxDate;
-                startInput.max = (endInput.value && endInput.value <= maxDate) ? endInput.value : maxDate;
-            }
-
-            if (startInput.value) {
-                if (minDate && startInput.value < minDate) startInput.value = minDate;
-                if (maxDate && startInput.value > maxDate) startInput.value = maxDate;
-            }
-            if (endInput.value) {
-                if (minDate && endInput.value < minDate) endInput.value = minDate;
-                if (maxDate && endInput.value > maxDate) endInput.value = maxDate;
-            }
-        }
-
-        function onDeleteDateChange(which) {
-            const startInput = document.getElementById('del-start-date');
-            const endInput = document.getElementById('del-end-date');
-            if (!startInput || !endInput) return;
-
-            const minDate = oldestAbsensiDateBound || todayDateBound;
-            const maxDate = todayDateBound || oldestAbsensiDateBound;
-
-            if (startInput.value) {
-                if (minDate && startInput.value < minDate) startInput.value = minDate;
-                if (maxDate && startInput.value > maxDate) startInput.value = maxDate;
-            }
-            if (endInput.value) {
-                if (minDate && endInput.value < minDate) endInput.value = minDate;
-                if (maxDate && endInput.value > maxDate) endInput.value = maxDate;
-            }
-
-            if (which === 'start' && startInput.value) {
-                endInput.min = startInput.value;
-                if (endInput.value && endInput.value < startInput.value) {
-                    endInput.value = startInput.value;
-                }
-            } else if (which === 'end' && endInput.value) {
-                startInput.max = endInput.value;
-                if (startInput.value && startInput.value > endInput.value) {
-                    startInput.value = endInput.value;
-                }
-            } else {
-                applyDeleteDateBounds();
-            }
-        }
 
         function showAlert(msg, type = 'success') {
             let alertBox = document.getElementById('dynamic-alert');
@@ -1343,14 +1284,7 @@
             }
         }
 
-        async function openDeleteAbsensiModal() {
-            try {
-                const res = await fetch('/api/dashboard-summary?page=' + (currentPageActivePage || 1));
-                const data = await res.json();
-                if (data && data.oldestAbsensiDate) oldestAbsensiDateBound = data.oldestAbsensiDate;
-                if (data && data.todayDate) todayDateBound = data.todayDate;
-            } catch (_) {}
-            applyDeleteDateBounds();
+        function openDeleteAbsensiModal() {
             const modal = document.getElementById('delete-absensi-modal');
             if (modal) modal.classList.add('active');
         }
@@ -1361,25 +1295,11 @@
         }
 
         function openConfirmDeleteAbsensiModal() {
-            applyDeleteDateBounds();
-            const form = document.getElementById('delete-absensi-form');
-            if (!form.checkValidity()) {
-                form.reportValidity();
-                return;
-            }
-
-            const startDate = document.getElementById('del-start-date').value;
-            const endDate = document.getElementById('del-end-date').value;
             const deleteLocal = document.getElementById('del-local').checked;
 
-            if (startDate > endDate) {
-                alert('Tanggal mulai tidak boleh lebih besar dari tanggal sampai.');
-                return;
-            }
-
-            let confirmText = `Apakah Anda yakin ingin menghapus data absensi di mesin pada rentang tanggal <b>${startDate}</b> s/d <b>${endDate}</b>?`;
+            let confirmText = `Apakah Anda yakin ingin menghapus <b>seluruh data absensi</b> di mesin?`;
             if (deleteLocal) {
-                confirmText += `<br><br><span style="color: #dc2626; font-size: 14.5px;">*Data pada Database Lokal di rentang tersebut juga akan ikut dihapus.</span>`;
+                confirmText += `<br><br><span style="color: #dc2626; font-size: 14.5px;">*Seluruh data absensi pada <b>Database Lokal</b> juga akan ikut dihapus.</span>`;
             }
 
             document.getElementById('confirm-delete-text').innerHTML = confirmText;
@@ -1401,22 +1321,56 @@
             document.getElementById('delete-absensi-form').submit();
         }
 
-        async function openRestoreAbsensiModal() {
-            try {
-                const res = await fetch('/api/dashboard-summary?page=' + (currentPageActivePage || 1));
-                const data = await res.json();
-                const badgeEl = document.getElementById('deleted-logs-count-badge');
-                if (badgeEl && data && typeof data.totalDeletedLogs !== 'undefined') {
-                    badgeEl.innerText = data.totalDeletedLogs;
-                }
-            } catch (_) {}
-            const modal = document.getElementById('restore-absensi-modal');
+        function openImportDbModal() {
+            const fileInput = document.getElementById('import-db-file');
+            if (fileInput) fileInput.value = '';
+            const modal = document.getElementById('import-db-modal');
             if (modal) modal.classList.add('active');
         }
 
-        function closeRestoreAbsensiModal() {
-            const modal = document.getElementById('restore-absensi-modal');
+        function closeImportDbModal() {
+            const modal = document.getElementById('import-db-modal');
             if (modal) modal.classList.remove('active');
+        }
+
+        async function submitImportDatabase(event) {
+            event.preventDefault();
+            const fileInput = document.getElementById('import-db-file');
+            if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+                alert('Silakan pilih file database (.db) terlebih dahulu.');
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const submitBtn = document.getElementById('btn-submit-import-db');
+            const originalText = submitBtn.innerText;
+            submitBtn.disabled = true;
+            submitBtn.innerText = 'Mengimpor...';
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const res = await fetch('/api/database/import', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/octet-stream'
+                    },
+                    body: arrayBuffer
+                });
+                const data = await res.json();
+                closeImportDbModal();
+                if (data.success) {
+                    showAlert(data.message, 'success');
+                    refreshDashboardStats(1, currentSearchQuery);
+                } else {
+                    showAlert(data.message || 'Gagal mengimpor database.', 'error');
+                }
+            } catch (err) {
+                closeImportDbModal();
+                showAlert('Gagal mengunggah file database ke server.', 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerText = originalText;
+            }
         }
 
         // Dropdown Profil & Modal Profil / Tambah Admin
@@ -1618,9 +1572,6 @@
                 const res = await fetch('/api/dashboard-summary?' + queryParams.toString());
                 const data = await res.json();
                 currentPageActivePage = data.currentPage || page;
-                if (data.oldestAbsensiDate) oldestAbsensiDateBound = data.oldestAbsensiDate;
-                if (data.todayDate) todayDateBound = data.todayDate;
-                applyDeleteDateBounds();
                 
                 // Update Tabel
                 const tbody = document.getElementById('absensi-table-body');
@@ -1765,7 +1716,6 @@
 
         // Cek jika halaman direfresh di tengah-tengah sinkronisasi (lanjutkan overlay progress)
         window.addEventListener('load', async () => {
-            applyDeleteDateBounds();
             try {
                 const res = await fetch('/api/sync-status');
                 const state = await res.json();
