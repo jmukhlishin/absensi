@@ -2,6 +2,7 @@ const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const bodyParser = require('body-parser');
 const path = require('path');
+const fs = require('fs');
 const moment = require('moment');
 const crypto = require('crypto');
 const ZKLib = require('node-zklib');
@@ -39,131 +40,129 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Setup Database SQLite (Persisten)
 const dbPath = path.join(__dirname, 'absensi.db');
-const db = new sqlite3.Database(dbPath, (err) => {
+let db = null;
+
+function initializeDatabaseSchema(databaseInstance) {
+    databaseInstance.serialize(() => {
+        // Gunakan WAL mode agar operasi baca/tulis tidak saling memblokir (non-blocking)
+        databaseInstance.run(`PRAGMA journal_mode = WAL`);
+        databaseInstance.run(`PRAGMA busy_timeout = 5000`);
+
+        // Table Pengaturan Mesin (key-value)
+        databaseInstance.run(`CREATE TABLE IF NOT EXISTS pengaturan (
+            kunci TEXT PRIMARY KEY,
+            nilai TEXT NOT NULL
+        )`, () => {
+            databaseInstance.run(`INSERT OR IGNORE INTO pengaturan (kunci, nilai) VALUES ('machine_ip', '192.168.0.11')`);
+            databaseInstance.run(`INSERT OR IGNORE INTO pengaturan (kunci, nilai) VALUES ('machine_port', '4370')`);
+        });
+
+        // Table Akun (id, nama, username, password, role)
+        databaseInstance.run(`CREATE TABLE IF NOT EXISTS akun (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nama TEXT NOT NULL,
+            username TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT 'admin'
+        )`, () => {
+            // Pastikan kolom role tersedia jika tabel sudah ada sebelumnya
+            databaseInstance.all(`PRAGMA table_info(akun)`, (pragmaErr, columns) => {
+                if (!pragmaErr && Array.isArray(columns)) {
+                    const hasRole = columns.some(col => col.name === 'role');
+                    if (!hasRole) {
+                        databaseInstance.run(`ALTER TABLE akun ADD COLUMN role TEXT NOT NULL DEFAULT 'admin'`);
+                    }
+                }
+                // Buat akun default superadmin dan admin jika tabel masih kosong
+                databaseInstance.get(`SELECT COUNT(*) as total FROM akun`, (countErr, row) => {
+                    if (!countErr && row && row.total === 0) {
+                        databaseInstance.run(
+                            `INSERT INTO akun (nama, username, password, role) VALUES (?, ?, ?, ?)`,
+                            ['Super Admin', 'superadmin', 'superadmin123', 'superadmin']
+                        );
+                        databaseInstance.run(
+                            `INSERT INTO akun (nama, username, password, role) VALUES (?, ?, ?, ?)`,
+                            ['Admin', 'admin', 'admin123', 'admin']
+                        );
+                    }
+                });
+            });
+        });
+
+        // Table Karyawan (uid is the deviceUserId/userId) - Persisten tanpa DROP TABLE
+        databaseInstance.run(`CREATE TABLE IF NOT EXISTS karyawan (
+            uid TEXT PRIMARY KEY,
+            nama TEXT NOT NULL,
+            jabatan TEXT DEFAULT '',
+            perusahaan TEXT DEFAULT '',
+            divisi TEXT DEFAULT ''
+        )`);
+
+        // Pastikan kolom jabatan, perusahaan, dan divisi tersedia untuk database yang sudah ada sebelumnya
+        databaseInstance.all(`PRAGMA table_info(karyawan)`, (pragmaErr, columns) => {
+            if (!pragmaErr && Array.isArray(columns)) {
+                const hasJabatan = columns.some(col => col.name === 'jabatan');
+                if (!hasJabatan) {
+                    databaseInstance.run(`ALTER TABLE karyawan ADD COLUMN jabatan TEXT DEFAULT ''`);
+                }
+                const hasPerusahaan = columns.some(col => col.name === 'perusahaan');
+                if (!hasPerusahaan) {
+                    databaseInstance.run(`ALTER TABLE karyawan ADD COLUMN perusahaan TEXT DEFAULT ''`);
+                }
+                const hasDivisi = columns.some(col => col.name === 'divisi');
+                if (!hasDivisi) {
+                    databaseInstance.run(`ALTER TABLE karyawan ADD COLUMN divisi TEXT DEFAULT ''`);
+                }
+            }
+        });
+
+        // Table Absensi - Persisten tanpa DROP TABLE
+        databaseInstance.run(`CREATE TABLE IF NOT EXISTS absensi (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            uid TEXT NOT NULL,
+            waktu TEXT NOT NULL,
+            status TEXT NOT NULL,
+            FOREIGN KEY (uid) REFERENCES karyawan(uid)
+        )`);
+
+        // Skema Database Struktur Perusahaan (Perusahaan, Divisi, dan Hierarki Struktur)
+        databaseInstance.run(`CREATE TABLE IF NOT EXISTS perusahaan (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nama TEXT NOT NULL
+        )`);
+
+        databaseInstance.run(`CREATE TABLE IF NOT EXISTS divisi (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nama TEXT NOT NULL
+        )`);
+
+        databaseInstance.run(`CREATE TABLE IF NOT EXISTS struktur_perusahaan (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            node_id TEXT UNIQUE NOT NULL,
+            tipe TEXT NOT NULL,
+            ref_id INTEGER NOT NULL,
+            nama TEXT NOT NULL,
+            parent_node_id TEXT DEFAULT NULL,
+            urutan INTEGER DEFAULT 0
+        )`);
+
+        // Index untuk mempercepat query dashboard, pengecekan sync incremental, dan ekspor data
+        databaseInstance.run(`CREATE INDEX IF NOT EXISTS idx_absensi_waktu ON absensi(waktu DESC)`);
+        databaseInstance.run(`CREATE INDEX IF NOT EXISTS idx_absensi_uid_waktu ON absensi(uid, waktu)`);
+        databaseInstance.run(`CREATE INDEX IF NOT EXISTS idx_karyawan_nama ON karyawan(nama)`);
+
+        // Perbaiki database: hapus log absen di masa depan (misal jam 18 padahal siang)
+        const currentTime = moment().format('YYYY-MM-DD HH:mm:ss');
+        databaseInstance.run(`DELETE FROM absensi WHERE waktu > ?`, [currentTime]);
+    });
+}
+
+db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
         console.error('Error opening database', err.message);
     } else {
         console.log('Connected to the SQLite database.');
-
-        db.serialize(() => {
-            // Gunakan WAL mode agar operasi baca/tulis tidak saling memblokir (non-blocking)
-            db.run(`PRAGMA journal_mode = WAL`);
-            db.run(`PRAGMA busy_timeout = 5000`);
-
-            // Table Pengaturan Mesin (key-value)
-            db.run(`CREATE TABLE IF NOT EXISTS pengaturan (
-                kunci TEXT PRIMARY KEY,
-                nilai TEXT NOT NULL
-            )`, () => {
-                db.run(`INSERT OR IGNORE INTO pengaturan (kunci, nilai) VALUES ('machine_ip', '192.168.0.11')`);
-                db.run(`INSERT OR IGNORE INTO pengaturan (kunci, nilai) VALUES ('machine_port', '4370')`);
-            });
-
-            // Table Akun (id, nama, username, password, role)
-            db.run(`CREATE TABLE IF NOT EXISTS akun (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                nama TEXT NOT NULL,
-                username TEXT UNIQUE NOT NULL,
-                password TEXT NOT NULL,
-                role TEXT NOT NULL DEFAULT 'admin'
-            )`, () => {
-                // Pastikan kolom role tersedia jika tabel sudah ada sebelumnya
-                db.all(`PRAGMA table_info(akun)`, (pragmaErr, columns) => {
-                    if (!pragmaErr && Array.isArray(columns)) {
-                        const hasRole = columns.some(col => col.name === 'role');
-                        if (!hasRole) {
-                            db.run(`ALTER TABLE akun ADD COLUMN role TEXT NOT NULL DEFAULT 'admin'`);
-                        }
-                    }
-                    // Buat akun default superadmin dan admin jika tabel masih kosong
-                    db.get(`SELECT COUNT(*) as total FROM akun`, (countErr, row) => {
-                        if (!countErr && row && row.total === 0) {
-                            db.run(
-                                `INSERT INTO akun (nama, username, password, role) VALUES (?, ?, ?, ?)`,
-                                ['Super Admin', 'superadmin', 'superadmin123', 'superadmin']
-                            );
-                            db.run(
-                                `INSERT INTO akun (nama, username, password, role) VALUES (?, ?, ?, ?)`,
-                                ['Admin', 'admin', 'admin123', 'admin']
-                            );
-                        }
-                    });
-                });
-            });
-
-            // Table Karyawan (uid is the deviceUserId/userId) - Persisten tanpa DROP TABLE
-            db.run(`CREATE TABLE IF NOT EXISTS karyawan (
-                uid TEXT PRIMARY KEY,
-                nama TEXT NOT NULL,
-                jabatan TEXT DEFAULT '',
-                perusahaan TEXT DEFAULT '',
-                divisi TEXT DEFAULT ''
-            )`);
-
-            // Pastikan kolom jabatan, perusahaan, dan divisi tersedia untuk database yang sudah ada sebelumnya
-            db.all(`PRAGMA table_info(karyawan)`, (pragmaErr, columns) => {
-                if (!pragmaErr && Array.isArray(columns)) {
-                    const hasJabatan = columns.some(col => col.name === 'jabatan');
-                    if (!hasJabatan) {
-                        db.run(`ALTER TABLE karyawan ADD COLUMN jabatan TEXT DEFAULT ''`);
-                    }
-                    const hasPerusahaan = columns.some(col => col.name === 'perusahaan');
-                    if (!hasPerusahaan) {
-                        db.run(`ALTER TABLE karyawan ADD COLUMN perusahaan TEXT DEFAULT ''`);
-                    }
-                    const hasDivisi = columns.some(col => col.name === 'divisi');
-                    if (!hasDivisi) {
-                        db.run(`ALTER TABLE karyawan ADD COLUMN divisi TEXT DEFAULT ''`);
-                    }
-                }
-            });
-
-            // Table Absensi - Persisten tanpa DROP TABLE
-            db.run(`CREATE TABLE IF NOT EXISTS absensi (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                uid TEXT NOT NULL,
-                waktu TEXT NOT NULL,
-                status TEXT NOT NULL,
-                FOREIGN KEY (uid) REFERENCES karyawan(uid)
-            )`);
-
-            // Table Pencatatan Log Mesin yang Dihapus per Rentang Waktu
-            db.run(`CREATE TABLE IF NOT EXISTS deleted_machine_logs (
-                uid TEXT NOT NULL,
-                waktu TEXT NOT NULL,
-                PRIMARY KEY (uid, waktu)
-            )`);
-
-            // Skema Database Struktur Perusahaan (Perusahaan, Divisi, dan Hierarki Struktur)
-            db.run(`CREATE TABLE IF NOT EXISTS perusahaan (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                nama TEXT NOT NULL
-            )`);
-
-            db.run(`CREATE TABLE IF NOT EXISTS divisi (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                nama TEXT NOT NULL
-            )`);
-
-            db.run(`CREATE TABLE IF NOT EXISTS struktur_perusahaan (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                node_id TEXT UNIQUE NOT NULL,
-                tipe TEXT NOT NULL,
-                ref_id INTEGER NOT NULL,
-                nama TEXT NOT NULL,
-                parent_node_id TEXT DEFAULT NULL,
-                urutan INTEGER DEFAULT 0
-            )`);
-
-            // Index untuk mempercepat query dashboard, pengecekan sync incremental, dan ekspor data
-            db.run(`CREATE INDEX IF NOT EXISTS idx_absensi_waktu ON absensi(waktu DESC)`);
-            db.run(`CREATE INDEX IF NOT EXISTS idx_absensi_uid_waktu ON absensi(uid, waktu)`);
-            db.run(`CREATE INDEX IF NOT EXISTS idx_karyawan_nama ON karyawan(nama)`);
-
-            // Perbaiki database: hapus log absen di masa depan (misal jam 18 padahal siang)
-            const currentTime = moment().format('YYYY-MM-DD HH:mm:ss');
-            db.run(`DELETE FROM absensi WHERE waktu > ?`, [currentTime]);
-        });
+        initializeDatabaseSchema(db);
     }
 });
 
@@ -232,10 +231,7 @@ async function readMachineAttendanceCount(zkInstance) {
                     }
                     if (payload.length >= 36) {
                         const rawLogCount = payload.readUInt32LE(32);
-                        const deletedCountRow = await dbGet(`SELECT COUNT(*) as total FROM deleted_machine_logs`);
-                        const deletedCount = deletedCountRow ? deletedCountRow.total : 0;
-                        const activeCount = Math.max(0, rawLogCount - deletedCount);
-                        return activeCount;
+                        return Math.max(0, rawLogCount);
                     }
                 }
             } catch (_) {}
@@ -245,8 +241,6 @@ async function readMachineAttendanceCount(zkInstance) {
         if (typeof zkInstance.getAttendances === 'function') {
             const logsResp = await zkInstance.getAttendances();
             const allMachineLogs = (logsResp && Array.isArray(logsResp.data)) ? logsResp.data : [];
-            const deletedRows = await dbAll(`SELECT uid, waktu FROM deleted_machine_logs`);
-            const deletedSet = new Set(deletedRows.map(r => `${r.uid}|${r.waktu}`));
             const nowStr = moment().format('YYYY-MM-DD HH:mm:ss');
             let count = 0;
             for (const log of allMachineLogs) {
@@ -257,7 +251,6 @@ async function readMachineAttendanceCount(zkInstance) {
                 if (!m.isValid()) continue;
                 const waktu = m.format('YYYY-MM-DD HH:mm:ss');
                 if (waktu > nowStr) continue;
-                if (deletedSet.has(`${uid}|${waktu}`)) continue;
                 count++;
             }
             return count;
@@ -587,140 +580,39 @@ app.post('/api/restart-machine', async (req, res) => {
     }
 });
 
-// Helper encode waktu ke format integer 32-bit ZKTeco
-function encodeZkTime(dateStr, isEndOfDay = false) {
-    const m = moment(dateStr, 'YYYY-MM-DD');
-    const year = m.year();
-    const month = m.month() + 1;
-    const day = m.date();
-    const hour = isEndOfDay ? 23 : 0;
-    const minute = isEndOfDay ? 59 : 0;
-    const second = isEndOfDay ? 59 : 0;
-    return (((year - 2000) * 12 * 31 + (month - 1) * 31 + (day - 1)) * 86400) + (hour * 3600) + (minute * 60) + second;
-}
-
-// API Hapus Data Absensi di Mesin Berdasarkan Rentang Waktu (dan Opsi Checklist Hapus Database Lokal) - Hanya Superadmin
+// API Hapus Semua Data Absensi di Mesin (Sesuai kemampuan mesin ZKTeco: hapus seluruh log absensi, dengan opsi hapus Database Lokal) - Hanya Superadmin
 app.post('/api/absensi/delete', async (req, res) => {
     try {
         if (req.user.role !== 'superadmin') {
             return res.redirect('/?msg=' + encodeURIComponent('Akses ditolak! Hanya Superadmin yang dapat menghapus data absensi.') + '&type=error');
-        }
-        
-        const { start_date, end_date, delete_local } = req.body;
-        
-        if (!start_date || !end_date) {
-            return res.redirect('/?msg=' + encodeURIComponent('Rentang tanggal mulai dan sampai harus diisi.') + '&type=error');
-        }
-
-        if (start_date > end_date) {
-            return res.redirect('/?msg=' + encodeURIComponent('Tanggal mulai tidak boleh lebih besar dari tanggal sampai.') + '&type=error');
-        }
-
-        // Validasi rentang waktu sesuai tanggal terlama pada log absensi sampai bulan/tanggal saat ini
-        const oldestLogRow = await dbGet(`SELECT MIN(date(waktu)) as oldestDate FROM absensi`);
-        const todayDate = moment().format('YYYY-MM-DD');
-        const endOfCurrentMonth = moment().endOf('month').format('YYYY-MM-DD');
-        const minAllowedDate = (oldestLogRow && oldestLogRow.oldestDate) ? oldestLogRow.oldestDate : todayDate;
-
-        if (start_date < minAllowedDate) {
-            return res.redirect('/?msg=' + encodeURIComponent(`Tanggal mulai tidak boleh lebih lama dari tanggal log absensi terlama (${minAllowedDate}).`) + '&type=error');
-        }
-
-        if (end_date > endOfCurrentMonth) {
-            return res.redirect('/?msg=' + encodeURIComponent('Rentang tanggal tidak boleh melewati bulan saat ini.') + '&type=error');
         }
 
         if (syncState.isSyncing) {
             return res.redirect('/?msg=' + encodeURIComponent('Mesin sedang melakukan sinkronisasi data. Harap tunggu hingga selesai.') + '&type=error');
         }
 
-        // 1. Hapus data absensi/kehadiran di mesin absensi berdasarkan rentang waktu
+        const { delete_local } = req.body;
+
+        // 1. Hapus semua data absensi di mesin absensi (CMD_CLEAR_ATTLOG = 15)
         let machineSuccess = false;
         let machineError = '';
-        let deletedInMachineCount = 0;
 
         try {
             const config = await getMachineConfig();
             const zkInstance = new ZKLib(config.ip, config.port, 10000, 4000);
             await zkInstance.createSocket();
 
-            const deletedRows = await dbAll(`SELECT uid, waktu FROM deleted_machine_logs`);
-            const alreadyDeletedSet = new Set(deletedRows.map(r => `${r.uid}|${r.waktu}`));
-
-            // Baca log dari mesin terlebih dahulu untuk memisahkan log di dalam & di luar rentang waktu
-            const logsResp = await zkInstance.getAttendances();
-            const allMachineLogs = (logsResp && Array.isArray(logsResp.data)) ? logsResp.data : [];
-
-            const logsInRange = [];
-            const logsOutsideRange = [];
-            const nowStr = moment().format('YYYY-MM-DD HH:mm:ss');
-
-            for (const log of allMachineLogs) {
-                if (!log || !log.recordTime) continue;
-                const uid = String(log.deviceUserId || log.userId || log.uid || '').trim();
-                if (!uid) continue;
-
-                const m = moment(log.recordTime);
-                if (!m.isValid()) continue;
-                const waktu = m.format('YYYY-MM-DD HH:mm:ss');
-                if (waktu > nowStr) continue;
-
-                const uniqueKey = `${uid}|${waktu}`;
-                if (alreadyDeletedSet.has(uniqueKey)) continue;
-
-                const logDate = waktu.slice(0, 10);
-                if (logDate >= start_date && logDate <= end_date) {
-                    logsInRange.push({ uid, waktu });
-                } else {
-                    logsOutsideRange.push({ uid, waktu });
-                }
+            if (typeof zkInstance.clearAttendanceLog === 'function') {
+                await zkInstance.clearAttendanceLog();
+            } else {
+                await zkInstance.executeCmd(15, '');
             }
 
-            deletedInMachineCount = logsInRange.length;
+            try {
+                await zkInstance.executeCmd(1013, '');
+            } catch (_) {}
 
-            if (deletedInMachineCount > 0) {
-                // Catat log yang dihapus pada rentang tanggal ini ke tombstone agar tidak disinkronkan lagi
-                for (const item of logsInRange) {
-                    await dbRun(
-                        `INSERT OR IGNORE INTO deleted_machine_logs (uid, waktu) VALUES (?, ?)`,
-                        [item.uid, item.waktu]
-                    );
-                }
-
-                // Amankan log di luar rentang tanggal ke database lokal sebelum membersihkan memori mesin
-                if (logsOutsideRange.length > 0) {
-                    const existingLogs = await dbAll(`SELECT uid, waktu FROM absensi`);
-                    const existingLogsSet = new Set(existingLogs.map(r => `${r.uid}|${r.waktu}`));
-                    logsOutsideRange.sort((a, b) => a.waktu.localeCompare(b.waktu));
-
-                    for (const item of logsOutsideRange) {
-                        const key = `${item.uid}|${item.waktu}`;
-                        if (!existingLogsSet.has(key)) {
-                            await saveAttendanceLog(item.uid, item.waktu, 'Mesin');
-                            existingLogsSet.add(key);
-                        }
-                    }
-                }
-
-                // Karena Command 15 menghapus seluruh log mesin (mengabaikan argumen rentang waktu), 
-                // kita hanya menjalankan ClearAttendanceLog jika tidak ada log aktif yang tersisa di luar rentang ini.
-                if (logsOutsideRange.length === 0) {
-                    try {
-                        if (typeof zkInstance.clearAttendanceLog === 'function') {
-                            await zkInstance.clearAttendanceLog();
-                        } else {
-                            await zkInstance.executeCmd(15, '');
-                        }
-                    } catch (_) {}
-                }
-
-                try {
-                    await zkInstance.executeCmd(1013, '');
-                } catch (_) {}
-            }
-
-            // Update jumlah log aktif di mesin secara realtime
-            lastMachineAttendanceCount = logsOutsideRange.length;
+            lastMachineAttendanceCount = 0;
             lastMachineCheckTime = Date.now();
 
             try { await zkInstance.disconnect(); } catch (e) {}
@@ -730,30 +622,23 @@ app.post('/api/absensi/delete', async (req, res) => {
             machineError = e && e.message ? e.message : 'Koneksi ke mesin gagal';
         }
 
-        // 2. Jika checklist hapus database lokal dipilih, hapus juga di database lokal sesuai rentang tanggal
+        // 2. Jika checklist hapus database lokal dipilih, hapus juga seluruh data absensi di database lokal
         let localDeleted = false;
         if (delete_local === '1') {
-            const localRowsToDelete = await dbAll(`SELECT uid, waktu FROM absensi WHERE date(waktu) >= ? AND date(waktu) <= ?`, [start_date, end_date]);
-            for (const item of localRowsToDelete) {
-                await dbRun(
-                    `INSERT OR IGNORE INTO deleted_machine_logs (uid, waktu) VALUES (?, ?)`,
-                    [item.uid, item.waktu]
-                );
-            }
-            await dbRun(`DELETE FROM absensi WHERE date(waktu) >= ? AND date(waktu) <= ?`, [start_date, end_date]);
+            await dbRun(`DELETE FROM absensi`);
             localDeleted = true;
         }
 
         if (!machineSuccess) {
             const extraLocalMsg = localDeleted
-                ? `, namun data di database lokal (${start_date} s/d ${end_date}) berhasil dihapus.`
+                ? `, namun seluruh data absensi di database lokal berhasil dihapus.`
                 : '.';
             return res.redirect('/?msg=' + encodeURIComponent(`Gagal menghapus data absensi di mesin (${machineError})${extraLocalMsg}`) + '&type=error');
         }
 
         const successMsg = localDeleted
-            ? `Data absensi di mesin (${deletedInMachineCount} log) serta database lokal pada rentang ${start_date} s/d ${end_date} berhasil dihapus!`
-            : `Data absensi di mesin pada rentang ${start_date} s/d ${end_date} (${deletedInMachineCount} log) berhasil dihapus!`;
+            ? `Seluruh data absensi di mesin serta database lokal berhasil dihapus!`
+            : `Seluruh data absensi di mesin berhasil dihapus!`;
 
         res.redirect('/?msg=' + encodeURIComponent(successMsg) + '&type=success');
     } catch (err) {
@@ -762,120 +647,130 @@ app.post('/api/absensi/delete', async (req, res) => {
     }
 });
 
-// API Kembalikan Data Absensi yang Sebelumnya Dihapus di Mesin - Hanya Superadmin
-app.post('/api/absensi/restore', async (req, res) => {
+// API Backup Database (.db) ke Komputer - Hanya Superadmin
+app.get('/api/database/backup', async (req, res) => {
+    if (req.user.role !== 'superadmin') {
+        return res.redirect('/?msg=' + encodeURIComponent('Akses ditolak! Hanya Superadmin yang dapat mem-backup database.') + '&type=error');
+    }
+
+    const timestamp = moment().format('YYYYMMDD_HHmmss');
+    const downloadFilename = `absensi_backup_${timestamp}.db`;
+    const tempBackupPath = path.join(__dirname, `temp_backup_${Date.now()}_${ process.pid }.db`);
+
+    try {
+        if (fs.existsSync(tempBackupPath)) {
+            fs.unlinkSync(tempBackupPath);
+        }
+
+        // Gunakan VACUUM INTO agar aman dalam mode WAL dan menghasilkan 1 file .db utuh
+        try {
+            const escapedPath = tempBackupPath.replace(/'/g, "''");
+            await dbRun(`VACUUM INTO '${escapedPath}'`);
+        } catch (vacuumErr) {
+            // Fallback jika versi SQLite tidak mendukung VACUUM INTO
+            await dbRun(`PRAGMA wal_checkpoint(TRUNCATE)`);
+            fs.copyFileSync(dbPath, tempBackupPath);
+        }
+
+        res.download(tempBackupPath, downloadFilename, (err) => {
+            try {
+                if (fs.existsSync(tempBackupPath)) {
+                    fs.unlinkSync(tempBackupPath);
+                }
+            } catch (_) {}
+            if (err && !res.headersSent) {
+                res.status(500).send('Gagal mengunduh file backup database.');
+            }
+        });
+    } catch (err) {
+        console.error('Gagal backup database:', err);
+        try {
+            if (fs.existsSync(tempBackupPath)) {
+                fs.unlinkSync(tempBackupPath);
+            }
+        } catch (_) {}
+        res.redirect('/?msg=' + encodeURIComponent('Gagal membuat backup database: ' + err.message) + '&type=error');
+    }
+});
+
+// API Impor / Restore Database (.db) dari Komputer - Hanya Superadmin
+app.post('/api/database/import', express.raw({ type: '*/*', limit: '100mb' }), async (req, res) => {
+    const tempImportPath = path.join(__dirname, `temp_import_${Date.now()}_${process.pid}.db`);
     try {
         if (req.user.role !== 'superadmin') {
-            return res.redirect('/?msg=' + encodeURIComponent('Akses ditolak! Hanya Superadmin yang dapat mengembalikan data absensi.') + '&type=error');
+            return res.status(403).json({ success: false, message: 'Akses ditolak! Hanya Superadmin yang dapat mengimpor database.' });
         }
 
         if (syncState.isSyncing) {
-            return res.redirect('/?msg=' + encodeURIComponent('Mesin sedang melakukan sinkronisasi data. Harap tunggu hingga selesai.') + '&type=error');
+            return res.status(400).json({ success: false, message: 'Mesin sedang melakukan sinkronisasi data. Harap tunggu hingga selesai.' });
         }
 
-        const { start_date, end_date } = req.body;
-
-        let deletedQuery = `SELECT uid, waktu FROM deleted_machine_logs`;
-        const deletedParams = [];
-
-        if (start_date && end_date) {
-            if (start_date > end_date) {
-                return res.redirect('/?msg=' + encodeURIComponent('Tanggal mulai tidak boleh lebih besar dari tanggal sampai.') + '&type=error');
-            }
-            deletedQuery += ` WHERE date(waktu) >= ? AND date(waktu) <= ?`;
-            deletedParams.push(start_date, end_date);
+        const fileBuffer = req.body;
+        if (!fileBuffer || !Buffer.isBuffer(fileBuffer) || fileBuffer.length < 100) {
+            return res.status(400).json({ success: false, message: 'File database tidak valid atau kosong.' });
         }
 
-        const deletedLogs = await dbAll(deletedQuery, deletedParams);
-
-        // Hapus catatan tombstone pada deleted_machine_logs agar log yang sebelumnya dihapus diizinkan kembali
-        if (start_date && end_date) {
-            await dbRun(`DELETE FROM deleted_machine_logs WHERE date(waktu) >= ? AND date(waktu) <= ?`, [start_date, end_date]);
-        } else {
-            await dbRun(`DELETE FROM deleted_machine_logs`);
+        // Validasi header standar file SQLite 3 ("SQLite format 3\0")
+        const sqliteHeader = fileBuffer.slice(0, 16).toString('utf8');
+        if (!sqliteHeader.startsWith('SQLite format 3')) {
+            return res.status(400).json({ success: false, message: 'File yang dipilih bukan file database SQLite (.db) yang valid!' });
         }
 
-        // Gabungkan kandidat pemulihan dari catatan deleted_machine_logs serta pembacaan ulang dari mesin
-        const candidateMap = new Map();
-        for (const item of deletedLogs) {
-            if (!item || !item.uid || !item.waktu) continue;
-            candidateMap.set(`${item.uid}|${item.waktu}`, { uid: item.uid, waktu: item.waktu });
-        }
+        fs.writeFileSync(tempImportPath, fileBuffer);
 
-        // Coba baca juga dari mesin jika log fisik masih tersimpan di memori mesin
+        // Verifikasi integritas file SQLite sebelum menggantikan absensi.db
+        await new Promise((resolve, reject) => {
+            const testDb = new sqlite3.Database(tempImportPath, sqlite3.OPEN_READONLY, (openErr) => {
+                if (openErr) return reject(new Error('File database rusak atau tidak dapat dibuka.'));
+                testDb.get(`PRAGMA integrity_check`, (checkErr, row) => {
+                    testDb.close(() => {
+                        if (checkErr || !row || row.integrity_check !== 'ok') {
+                            return reject(new Error('Pemeriksaan integritas database gagal (file corrupt).'));
+                        }
+                        resolve();
+                    });
+                });
+            });
+        });
+
+        // Tutup koneksi database aktif, ganti file absensi.db, dan buka kembali koneksi
+        await new Promise((resolve) => {
+            if (!db) return resolve();
+            db.close(() => resolve());
+        });
+
+        // Hapus jurnal WAL/SHM lama agar tidak bentrok dengan database hasil restore
         try {
-            const config = await getMachineConfig();
-            const zkInstance = new ZKLib(config.ip, config.port, 10000, 4000);
-            await zkInstance.createSocket();
-            const logsResp = await zkInstance.getAttendances();
-            try { await zkInstance.disconnect(); } catch (_) {}
+            if (fs.existsSync(dbPath + '-wal')) fs.unlinkSync(dbPath + '-wal');
+            if (fs.existsSync(dbPath + '-shm')) fs.unlinkSync(dbPath + '-shm');
+        } catch (_) {}
 
-            const allMachineLogs = (logsResp && Array.isArray(logsResp.data)) ? logsResp.data : [];
-            const nowStr = moment().format('YYYY-MM-DD HH:mm:ss');
-            const remainingDeletedRows = await dbAll(`SELECT uid, waktu FROM deleted_machine_logs`);
-            const remainingDeletedSet = new Set(remainingDeletedRows.map(r => `${r.uid}|${r.waktu}`));
+        fs.copyFileSync(tempImportPath, dbPath);
+        try { fs.unlinkSync(tempImportPath); } catch (_) {}
 
-            let activeMachineLogsCount = 0;
-            for (const log of allMachineLogs) {
-                if (!log || !log.recordTime) continue;
-                const uid = String(log.deviceUserId || log.userId || log.uid || '').trim();
-                if (!uid) continue;
+        await new Promise((resolve, reject) => {
+            db = new sqlite3.Database(dbPath, (err) => {
+                if (err) return reject(err);
+                initializeDatabaseSchema(db);
+                resolve();
+            });
+        });
 
-                const m = moment(log.recordTime);
-                if (!m.isValid()) continue;
-                const waktu = m.format('YYYY-MM-DD HH:mm:ss');
-                if (waktu > nowStr) continue;
-
-                const key = `${uid}|${waktu}`;
-                if (remainingDeletedSet.has(key)) continue;
-
-                activeMachineLogsCount++;
-
-                const logDate = waktu.slice(0, 10);
-                if (start_date && end_date && (logDate < start_date || logDate > end_date)) {
-                    continue;
-                }
-
-                candidateMap.set(key, { uid, waktu });
-            }
-
-            lastMachineAttendanceCount = activeMachineLogsCount;
-            lastMachineCheckTime = Date.now();
-        } catch (machineErr) {
-            console.error('Info koneksi mesin saat restore absensi:', machineErr.message);
-        }
-
-        const existingLogs = await dbAll(`SELECT uid, waktu FROM absensi`);
-        const existingSet = new Set(existingLogs.map(r => `${r.uid}|${r.waktu}`));
-
-        const logsToRestore = [];
-        for (const [key, item] of candidateMap.entries()) {
-            if (!existingSet.has(key)) {
-                logsToRestore.push(item);
-            }
-        }
-
-        logsToRestore.sort((a, b) => a.waktu.localeCompare(b.waktu));
-
-        let restoredCount = 0;
-        for (const item of logsToRestore) {
-            const resSave = await saveAttendanceLog(item.uid, item.waktu, 'Mesin');
-            if (resSave && resSave.changes > 0) {
-                restoredCount++;
-            }
-        }
-
-        if (deletedLogs.length === 0 && restoredCount === 0) {
-            return res.redirect('/?msg=' + encodeURIComponent('Tidak ditemukan riwayat data absensi yang dihapus sebelumnya.') + '&type=error');
-        }
-
-        const rangeText = (start_date && end_date) ? ` pada rentang ${start_date} s/d ${end_date}` : '';
-        const successMsg = `Data absensi yang sebelumnya dihapus di mesin${rangeText} berhasil dikembalikan (${restoredCount} data absensi dipulihkan, ${deletedLogs.length} catatan penghapusan dibersihkan)!`;
-
-        res.redirect('/?msg=' + encodeURIComponent(successMsg) + '&type=success');
+        res.json({
+            success: true,
+            message: 'Database absensi.db berhasil diimpor dan dipulihkan!'
+        });
     } catch (err) {
-        console.error('Error restore absensi:', err);
-        res.redirect('/?msg=' + encodeURIComponent('Gagal mengembalikan data absensi yang dihapus.') + '&type=error');
+        console.error('Gagal impor database:', err);
+        try {
+            if (fs.existsSync(tempImportPath)) {
+                fs.unlinkSync(tempImportPath);
+            }
+        } catch (_) {}
+        res.status(500).json({
+            success: false,
+            message: 'Gagal mengimpor database: ' + (err && err.message ? err.message : 'Kesalahan sistem.')
+        });
     }
 });
 
@@ -1052,21 +947,16 @@ app.get('/', async (req, res) => {
 
         const { listSql, countSql, searchParam, searchTerm } = buildAbsensiQuery(search);
 
-        const [absensiData, totalRow, karyawanRow, machineConfig, oldestLogRow, deletedCountRow] = await Promise.all([
+        const [absensiData, totalRow, karyawanRow, machineConfig] = await Promise.all([
             dbAll(listSql, [...searchParam, limit, offset]),
             dbGet(countSql, searchParam),
             dbGet('SELECT COUNT(*) as total FROM karyawan'),
-            getMachineConfig(),
-            dbGet('SELECT MIN(date(waktu)) as oldestDate FROM absensi'),
-            dbGet('SELECT COUNT(*) as total FROM deleted_machine_logs')
+            getMachineConfig()
         ]);
 
         const totalAbsensi = totalRow ? totalRow.total : 0;
         const totalPages = Math.ceil(totalAbsensi / limit) || 1;
         const totalKaryawan = karyawanRow ? karyawanRow.total : 0;
-        const totalDeletedLogs = deletedCountRow ? deletedCountRow.total : 0;
-        const todayDate = moment().format('YYYY-MM-DD');
-        const oldestAbsensiDate = (oldestLogRow && oldestLogRow.oldestDate) ? oldestLogRow.oldestDate : todayDate;
 
         const roleLabel = req.user.role === 'superadmin' ? 'Superadmin' : 'Admin';
 
@@ -1075,7 +965,6 @@ app.get('/', async (req, res) => {
             totalKaryawan: totalKaryawan,
             totalAbsensi: totalAbsensi,
             machineAttendanceCount: lastMachineAttendanceCount,
-            totalDeletedLogs: totalDeletedLogs,
             admin: `${req.user.nama} (${roleLabel})`,
             user: req.user,
             msg: msg,
@@ -1084,9 +973,7 @@ app.get('/', async (req, res) => {
             totalPages: totalPages,
             searchQuery: searchTerm,
             machineIp: machineConfig.ip,
-            machinePort: machineConfig.port,
-            oldestAbsensiDate: oldestAbsensiDate,
-            todayDate: todayDate
+            machinePort: machineConfig.port
         });
     } catch (err) {
         console.error('Error rendering dashboard:', err);
@@ -1120,34 +1007,26 @@ app.get('/api/dashboard-summary', async (req, res) => {
 
         const { listSql, countSql, searchParam, searchTerm } = buildAbsensiQuery(search);
 
-        const [rows, totalRow, karyawanRow, lastLogRow, oldestLogRow, deletedCountRow] = await Promise.all([
+        const [rows, totalRow, karyawanRow, lastLogRow] = await Promise.all([
             dbAll(listSql, [...searchParam, limit, offset]),
             dbGet(countSql, searchParam),
             dbGet('SELECT COUNT(*) as total FROM karyawan'),
-            dbGet('SELECT MAX(waktu) as lastWaktu FROM absensi'),
-            dbGet('SELECT MIN(date(waktu)) as oldestDate FROM absensi'),
-            dbGet('SELECT COUNT(*) as total FROM deleted_machine_logs')
+            dbGet('SELECT MAX(waktu) as lastWaktu FROM absensi')
         ]);
 
         const totalAbsensi = totalRow ? totalRow.total : 0;
         const totalPages = Math.ceil(totalAbsensi / limit) || 1;
         const totalKaryawan = karyawanRow ? karyawanRow.total : 0;
-        const totalDeletedLogs = deletedCountRow ? deletedCountRow.total : 0;
-        const todayDate = moment().format('YYYY-MM-DD');
-        const oldestAbsensiDate = (oldestLogRow && oldestLogRow.oldestDate) ? oldestLogRow.oldestDate : todayDate;
 
         res.json({
             rows,
             totalAbsensi,
             machineAttendanceCount: lastMachineAttendanceCount,
             totalKaryawan,
-            totalDeletedLogs,
             currentPage: page,
             totalPages,
             searchQuery: searchTerm,
-            lastWaktu: lastLogRow ? lastLogRow.lastWaktu : null,
-            oldestAbsensiDate,
-            todayDate
+            lastWaktu: lastLogRow ? lastLogRow.lastWaktu : null
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -1951,9 +1830,6 @@ async function runSyncAbsensi(ip, machinePort = 4370) {
         const existingLogs = await dbAll(`SELECT uid, waktu FROM absensi`);
         const existingLogsSet = new Set(existingLogs.map(r => `${r.uid}|${r.waktu}`));
 
-        const deletedMachineRows = await dbAll(`SELECT uid, waktu FROM deleted_machine_logs`);
-        const deletedMachineSet = new Set(deletedMachineRows.map(r => `${r.uid}|${r.waktu}`));
-
         updateSyncState({
             progress: 15,
             message: 'Menghubungkan ke mesin absensi...'
@@ -2000,11 +1876,9 @@ async function runSyncAbsensi(ip, machinePort = 4370) {
             // Abaikan log masa depan dari mesin yang salah waktu
             if (waktu > nowStr) continue;
 
-            const uniqueKey = `${uid}|${waktu}`;
-            if (deletedMachineSet.has(uniqueKey)) continue;
-
             activeMachineCount++;
 
+            const uniqueKey = `${uid}|${waktu}`;
             if (existingLogsSet.has(uniqueKey)) continue;
             if (seenKeys.has(uniqueKey)) continue;
             seenKeys.add(uniqueKey);
