@@ -217,6 +217,55 @@ async function getMachineConfig() {
     }
 }
 
+// Helper membaca jumlah log absensi aktif di mesin dari respon getAttendances atau CMD_GET_FREE_SIZES (Command 50)
+async function readMachineAttendanceCount(zkInstance) {
+    try {
+        // Coba baca menggunakan CMD_GET_FREE_SIZES (Command 50 pada protokol ZKTeco, offset 32..35 adalah jumlah log absensi)
+        if (typeof zkInstance.executeCmd === 'function') {
+            try {
+                const reply = await zkInstance.executeCmd(50, '');
+                let payload = reply;
+                if (Buffer.isBuffer(reply)) {
+                    // Jika buffer menyertakan header 8-byte (2000 = CMD_ACK_OK), baca setelah header
+                    if (reply.length >= 44 && reply.readUInt16LE(0) === 2000) {
+                        payload = reply.slice(8);
+                    }
+                    if (payload.length >= 36) {
+                        const rawLogCount = payload.readUInt32LE(32);
+                        const deletedCountRow = await dbGet(`SELECT COUNT(*) as total FROM deleted_machine_logs`);
+                        const deletedCount = deletedCountRow ? deletedCountRow.total : 0;
+                        const activeCount = Math.max(0, rawLogCount - deletedCount);
+                        return activeCount;
+                    }
+                }
+            } catch (_) {}
+        }
+
+        // Fallback: baca daftar log melalui getAttendances()
+        if (typeof zkInstance.getAttendances === 'function') {
+            const logsResp = await zkInstance.getAttendances();
+            const allMachineLogs = (logsResp && Array.isArray(logsResp.data)) ? logsResp.data : [];
+            const deletedRows = await dbAll(`SELECT uid, waktu FROM deleted_machine_logs`);
+            const deletedSet = new Set(deletedRows.map(r => `${r.uid}|${r.waktu}`));
+            const nowStr = moment().format('YYYY-MM-DD HH:mm:ss');
+            let count = 0;
+            for (const log of allMachineLogs) {
+                if (!log || !log.recordTime) continue;
+                const uid = String(log.deviceUserId || log.userId || log.uid || '').trim();
+                if (!uid) continue;
+                const m = moment(log.recordTime);
+                if (!m.isValid()) continue;
+                const waktu = m.format('YYYY-MM-DD HH:mm:ss');
+                if (waktu > nowStr) continue;
+                if (deletedSet.has(`${uid}|${waktu}`)) continue;
+                count++;
+            }
+            return count;
+        }
+    } catch (_) {}
+    return null;
+}
+
 // Helper koneksi & penghapusan user/karyawan di mesin absensi (ZKTeco protocol CMD_DELETE_USER = 18)
 async function deleteUserFromMachine(targetUid, targetNama = '') {
     const cleanUid = String(targetUid || '').replace(/\0/g, '').trim();
@@ -670,6 +719,10 @@ app.post('/api/absensi/delete', async (req, res) => {
                 } catch (_) {}
             }
 
+            // Update jumlah log aktif di mesin secara realtime
+            lastMachineAttendanceCount = logsOutsideRange.length;
+            lastMachineCheckTime = Date.now();
+
             try { await zkInstance.disconnect(); } catch (e) {}
             machineSuccess = true;
         } catch (e) {
@@ -762,6 +815,7 @@ app.post('/api/absensi/restore', async (req, res) => {
             const remainingDeletedRows = await dbAll(`SELECT uid, waktu FROM deleted_machine_logs`);
             const remainingDeletedSet = new Set(remainingDeletedRows.map(r => `${r.uid}|${r.waktu}`));
 
+            let activeMachineLogsCount = 0;
             for (const log of allMachineLogs) {
                 if (!log || !log.recordTime) continue;
                 const uid = String(log.deviceUserId || log.userId || log.uid || '').trim();
@@ -772,16 +826,21 @@ app.post('/api/absensi/restore', async (req, res) => {
                 const waktu = m.format('YYYY-MM-DD HH:mm:ss');
                 if (waktu > nowStr) continue;
 
+                const key = `${uid}|${waktu}`;
+                if (remainingDeletedSet.has(key)) continue;
+
+                activeMachineLogsCount++;
+
                 const logDate = waktu.slice(0, 10);
                 if (start_date && end_date && (logDate < start_date || logDate > end_date)) {
                     continue;
                 }
 
-                const key = `${uid}|${waktu}`;
-                if (remainingDeletedSet.has(key)) continue;
-
                 candidateMap.set(key, { uid, waktu });
             }
+
+            lastMachineAttendanceCount = activeMachineLogsCount;
+            lastMachineCheckTime = Date.now();
         } catch (machineErr) {
             console.error('Info koneksi mesin saat restore absensi:', machineErr.message);
         }
@@ -1015,6 +1074,7 @@ app.get('/', async (req, res) => {
             data: absensiData,
             totalKaryawan: totalKaryawan,
             totalAbsensi: totalAbsensi,
+            machineAttendanceCount: lastMachineAttendanceCount,
             totalDeletedLogs: totalDeletedLogs,
             admin: `${req.user.nama} (${roleLabel})`,
             user: req.user,
@@ -1079,6 +1139,7 @@ app.get('/api/dashboard-summary', async (req, res) => {
         res.json({
             rows,
             totalAbsensi,
+            machineAttendanceCount: lastMachineAttendanceCount,
             totalKaryawan,
             totalDeletedLogs,
             currentPage: page,
@@ -1925,6 +1986,7 @@ async function runSyncAbsensi(ip, machinePort = 4370) {
         const seenKeys = new Set();
         const candidateLogs = [];
         const nowStr = moment().format('YYYY-MM-DD HH:mm:ss');
+        let activeMachineCount = 0;
 
         for (const log of allLogs) {
             if (!log || !log.recordTime) continue;
@@ -1940,12 +2002,19 @@ async function runSyncAbsensi(ip, machinePort = 4370) {
 
             const uniqueKey = `${uid}|${waktu}`;
             if (deletedMachineSet.has(uniqueKey)) continue;
+
+            activeMachineCount++;
+
             if (existingLogsSet.has(uniqueKey)) continue;
             if (seenKeys.has(uniqueKey)) continue;
             seenKeys.add(uniqueKey);
 
             candidateLogs.push({ uid, waktu, status: 'Mesin' });
         }
+
+        // Perbarui cache jumlah log absensi realtime di mesin
+        lastMachineAttendanceCount = activeMachineCount;
+        lastMachineCheckTime = Date.now();
 
         // Urutkan log baru secara kronologis agar evaluasi Jam Masuk & Jam Pulang (>= 1 jam) akurat
         candidateLogs.sort((a, b) => a.waktu.localeCompare(b.waktu));
@@ -2086,10 +2155,11 @@ app.get('/api/sync-absensi', async (req, res) => {
     res.json(result);
 });
 
-// Cek Status Mesin (Non-blocking & tidak bentrok saat sedang sync)
+// Cek Status Mesin & Jumlah Log Absensi Realtime di Mesin (Non-blocking & tidak bentrok saat sedang sync)
 let isCheckingMachineStatus = false;
 let lastMachineStatus = 'Offline';
 let lastMachineCheckTime = 0;
+let lastMachineAttendanceCount = null;
 
 app.get('/api/machine-status', async (req, res) => {
     const config = await getMachineConfig();
@@ -2098,26 +2168,51 @@ app.get('/api/machine-status', async (req, res) => {
 
     // Jika sedang sinkronisasi dengan mesin, jangan buka socket baru agar tidak bentrok/blocking
     if (syncState.isSyncing) {
-        return res.json({ status: 'Online', syncing: true, ip, port: machinePort });
+        return res.json({
+            status: 'Online',
+            syncing: true,
+            ip,
+            port: machinePort,
+            machineAttendanceCount: lastMachineAttendanceCount
+        });
     }
 
     const now = Date.now();
     if (isCheckingMachineStatus || (now - lastMachineCheckTime < 5000)) {
-        return res.json({ status: lastMachineStatus, ip, port: machinePort });
+        return res.json({
+            status: lastMachineStatus,
+            ip,
+            port: machinePort,
+            machineAttendanceCount: lastMachineAttendanceCount
+        });
     }
 
     isCheckingMachineStatus = true;
-    const zkInstance = new ZKLib(ip, machinePort, 3000, 3000);
+    const zkInstance = new ZKLib(ip, machinePort, 4000, 4000);
     try {
         await zkInstance.createSocket();
+        const count = await readMachineAttendanceCount(zkInstance);
+        if (count !== null) {
+            lastMachineAttendanceCount = count;
+        }
         await zkInstance.disconnect();
         lastMachineStatus = 'Online';
         lastMachineCheckTime = Date.now();
-        res.json({ status: 'Online', ip, port: machinePort });
+        res.json({
+            status: 'Online',
+            ip,
+            port: machinePort,
+            machineAttendanceCount: lastMachineAttendanceCount
+        });
     } catch (e) {
         lastMachineStatus = 'Offline';
         lastMachineCheckTime = Date.now();
-        res.json({ status: 'Offline', ip, port: machinePort });
+        res.json({
+            status: 'Offline',
+            ip,
+            port: machinePort,
+            machineAttendanceCount: lastMachineAttendanceCount
+        });
     } finally {
         isCheckingMachineStatus = false;
     }
