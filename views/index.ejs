@@ -573,6 +573,14 @@
         .btn-sync-absensi:hover {
             background: #ffb300;
         }
+        .btn-restore-absensi {
+            background-color: #16a34a;
+            color: white;
+            margin-top: 8px;
+        }
+        .btn-restore-absensi:hover {
+            background-color: #15803d;
+        }
 
         .table-container {
             max-height: 520px;
@@ -964,6 +972,7 @@
                 <button type="button" class="btn-sync btn-sync-absensi" onclick="startSync('absensi')">Download Data Absensi</button>
                 <% if (typeof user !== 'undefined' && user && user.role === 'superadmin') { %>
                 <button type="button" class="btn-sync" style="background-color: #dc2626; color: white; margin-top: 8px;" onclick="openDeleteAbsensiModal()">Hapus Data Absensi</button>
+                <button type="button" class="btn-sync btn-restore-absensi" onclick="openRestoreAbsensiModal()">Kembalikan Data Absensi</button>
                 <% } %>
             </div>
         </div>
@@ -1115,6 +1124,39 @@
                 <button type="button" class="btn-cancel" onclick="closeConfirmDeleteAbsensiModal()">Batal</button>
                 <button type="button" class="btn-save" style="background-color: #dc2626; color: white;" onclick="submitDeleteAbsensiForm()">Ya, Hapus Data</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Modal Kembalikan Data Absensi yang Sebelumnya Dihapus di Mesin -->
+    <div id="restore-absensi-modal" class="account-modal-overlay" onclick="handleModalOverlayClick(event, 'restore-absensi-modal')">
+        <div class="account-modal-card" style="text-align: center; max-width: 440px;">
+            <div class="confirm-icon" style="color: #16a34a;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                    <path d="M3 3v5h5"></path>
+                </svg>
+            </div>
+            <h3 style="margin: 0 0 10px 0; color: var(--primary-blue);">Kembalikan Data Absensi</h3>
+            <form class="account-form" id="restore-absensi-form" action="/api/absensi/restore" method="POST">
+                <div class="confirm-text" style="font-size: 14.5px; margin-bottom: 10px;">
+                    Fitur ini akan mengembalikan data absensi yang sebelumnya dihapus di mesin agar dapat tampil dan disinkronkan kembali.
+                    <div id="restore-deleted-count-info" style="margin-top: 8px; font-weight: 700; color: #16a34a;">
+                        Tersimpan: <span id="deleted-logs-count-badge"><%= typeof totalDeletedLogs !== 'undefined' ? totalDeletedLogs : 0 %></span> log yang pernah dihapus.
+                    </div>
+                </div>
+                <div class="account-form-group">
+                    <label for="restore-start-date">Mulai Tanggal (Opsional - kosongkan untuk semua)</label>
+                    <input type="date" id="restore-start-date" name="start_date">
+                </div>
+                <div class="account-form-group">
+                    <label for="restore-end-date">Sampai Tanggal (Opsional - kosongkan untuk semua)</label>
+                    <input type="date" id="restore-end-date" name="end_date">
+                </div>
+                <div class="account-modal-actions" style="justify-content: center; gap: 12px; margin-top: 16px;">
+                    <button type="button" class="btn-cancel" onclick="closeRestoreAbsensiModal()">Batal</button>
+                    <button type="submit" class="btn-save" style="background-color: #16a34a; color: white;">Ya, Kembalikan Data</button>
+                </div>
+            </form>
         </div>
     </div>
     <% } %>
@@ -1353,6 +1395,24 @@
             const confirmModal = document.getElementById('confirm-delete-absensi-modal');
             if (confirmModal) confirmModal.classList.remove('active');
             document.getElementById('delete-absensi-form').submit();
+        }
+
+        async function openRestoreAbsensiModal() {
+            try {
+                const res = await fetch('/api/dashboard-summary?page=' + (currentPageActivePage || 1));
+                const data = await res.json();
+                const badgeEl = document.getElementById('deleted-logs-count-badge');
+                if (badgeEl && data && typeof data.totalDeletedLogs !== 'undefined') {
+                    badgeEl.innerText = data.totalDeletedLogs;
+                }
+            } catch (_) {}
+            const modal = document.getElementById('restore-absensi-modal');
+            if (modal) modal.classList.add('active');
+        }
+
+        function closeRestoreAbsensiModal() {
+            const modal = document.getElementById('restore-absensi-modal');
+            if (modal) modal.classList.remove('active');
         }
 
         // Dropdown Profil & Modal Profil / Tambah Admin
