@@ -547,6 +547,7 @@
         .btn-sync {
             width: 100%;
             padding: 10px 12px;
+            font-family: inherit;
             font-size: 14px;
             font-weight: 700;
             border: none;
@@ -556,6 +557,7 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            text-align: center;
             gap: 6px;
             text-decoration: none;
         }
@@ -585,6 +587,7 @@
             color: white;
             font-size: 13px;
             padding: 9px 8px;
+            text-align: center;
         }
         .btn-backup-db:hover {
             background-color: #0f766e;
@@ -594,6 +597,7 @@
             color: white;
             font-size: 13px;
             padding: 9px 8px;
+            text-align: center;
         }
         .btn-import-db:hover {
             background-color: #4338ca;
@@ -994,7 +998,7 @@
                 <% if (typeof user !== 'undefined' && user && user.role === 'superadmin') { %>
                 <button type="button" class="btn-sync" style="background-color: #dc2626; color: white; margin-top: 8px;" onclick="openDeleteAbsensiModal()">Hapus Data Absensi</button>
                 <div class="db-actions-row">
-                    <a href="/api/database/backup" class="btn-sync btn-backup-db" title="Download Backup absensi.db ke Komputer">Backup Database</a>
+                    <button type="button" class="btn-sync btn-backup-db" onclick="window.location.href='/api/database/backup'" title="Download Backup absensi.db ke Komputer">Backup Database</button>
                     <button type="button" class="btn-sync btn-import-db" onclick="openImportDbModal()" title="Impor / Restore absensi.db dari Komputer">Impor Database</button>
                 </div>
                 <% } %>
