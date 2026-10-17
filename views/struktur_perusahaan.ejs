@@ -26,7 +26,7 @@
             color: var(--text-dark);
         }
         .container {
-            max-width: 1280px;
+            max-width: 1120px;
             margin: auto;
             background: var(--white);
             padding: 28px;
@@ -100,6 +100,7 @@
         .nav a.nav-secondary {
             background: rgba(255, 255, 255, 0.15);
             color: var(--white);
+            box-shadow: none;
         }
         .nav a.nav-secondary:hover {
             background: var(--primary-yellow);
@@ -483,7 +484,7 @@
             color: #ffffff;
         }
 
-        /* Nested Tree Children (Berjenjang / Bertingkat) */
+        /* Nested Tree Children */
         .tree-children {
             list-style: none;
             margin: 12px 0 0 22px;
@@ -871,7 +872,7 @@
                                 <% if (perusahaanList && perusahaanList.length > 0) { %>
                                     <% perusahaanList.forEach((p, idx) => { %>
                                         <tr class="draggable-row" draggable="true"
-                                            data-tipe="perusahaan"
+                                            data-type="perusahaan"
                                             data-ref-id="<%= p.id %>"
                                             data-nama="<%= p.nama %>"
                                             ondragstart="onDragStartRow(event)"
@@ -923,7 +924,7 @@
                                 <% if (divisiList && divisiList.length > 0) { %>
                                     <% divisiList.forEach((d, idx) => { %>
                                         <tr class="draggable-row" draggable="true"
-                                            data-tipe="divisi"
+                                            data-type="divisi"
                                             data-ref-id="<%= d.id %>"
                                             data-nama="<%= d.nama %>"
                                             ondragstart="onDragStartRow(event)"
@@ -1048,7 +1049,7 @@
 
     <script>
         // Data struktur awal dari database
-        let treeData = <%- JSON.stringify(strukturTree || []) %>;
+        let treeData = <%- JSON.stringify(typeof strukturTree !== 'undefined' ? strukturTree : []) %>;
         let draggedPayload = null;
         let pendingAssignDivision = null;
 
@@ -1182,7 +1183,7 @@
         function onDragStartRow(event) {
             const el = event.currentTarget;
             if (!el) return;
-            const tipe = el.getAttribute('data-tipe');
+            const tipe = el.getAttribute('data-type');
             const refId = el.getAttribute('data-ref-id');
             const nama = el.getAttribute('data-nama');
             const existingNodeId = el.getAttribute('data-node-id') || null;
@@ -1382,7 +1383,7 @@
             document.addEventListener('touchstart', function(e) {
                 const handle = e.target.closest('.drag-icon');
                 if (!handle) return;
-                const draggableEl = handle.closest('[data-tipe]');
+                const draggableEl = handle.closest('[data-type]');
                 if (!draggableEl) return;
 
                 const touch = e.touches[0];
@@ -1390,7 +1391,7 @@
 
                 e.preventDefault();
                 draggedPayload = {
-                    tipe: draggableEl.getAttribute('data-tipe'),
+                    tipe: draggableEl.getAttribute('data-type'),
                     refId: Number(draggableEl.getAttribute('data-ref-id')),
                     nama: draggableEl.getAttribute('data-nama'),
                     existingNodeId: draggableEl.getAttribute('data-node-id') || null
@@ -1503,13 +1504,13 @@
             if (!children || children.length === 0) return '';
             let html = '<ul class="tree-children">';
             children.forEach(div => {
-                const safeNama = escapeHtml(div.nama);
+                const safeName = escapeHtml(div.nama);
                 html += `
                     <li class="tree-division-item"
                         draggable="true"
-                        data-tipe="divisi"
+                        data-type="divisi"
                         data-ref-id="${div.refId}"
-                        data-nama="${safeNama}"
+                        data-nama="${safeName}"
                         data-node-id="${div.nodeId}"
                         data-drop-node-id="${div.nodeId}"
                         ondragstart="onDragStartRow(event)"
@@ -1522,7 +1523,7 @@
                             <div class="tree-node-info">
                                 <span class="drag-icon" title="Tahan & geser">&#9776;</span>
                                 <span class="badge-type badge-division">Divisi</span>
-                                <span class="division-title">${safeNama}</span>
+                                <span class="division-title">${safeName}</span>
                             </div>
                             <button type="button" class="btn-remove-node" onclick="handleRemoveNode('${div.nodeId}')" title="Hapus dari struktur">&times;</button>
                         </div>
@@ -1553,7 +1554,7 @@
 
             let html = '<ul class="tree-root-list">';
             treeData.forEach(comp => {
-                const safeNama = escapeHtml(comp.nama);
+                const safeName = escapeHtml(comp.nama);
                 html += `
                     <li class="tree-company-item"
                         data-drop-node-id="${comp.nodeId}"
@@ -1564,12 +1565,12 @@
                         <div class="tree-node-card">
                             <div class="tree-node-info">
                                 <span class="badge-type badge-company">Perusahaan</span>
-                                <span class="company-title">${safeNama}</span>
+                                <span class="company-title">${safeName}</span>
                             </div>
                             <button type="button" class="btn-remove-node" onclick="handleRemoveNode('${comp.nodeId}')" title="Hapus perusahaan dari struktur">&times;</button>
                         </div>
                         ${renderDivisionChildren(comp.children)}
-                        <div class="drop-sub-hint">+ Tarik Divisi ke kotak ini untuk menambahkan divisi di bawah <strong>${safeNama}</strong> (atau tarik ke atas Divisi untuk membuat sub-divisi bertingkat)</div>
+                        <div class="drop-sub-hint">+ Tarik Divisi ke kotak ini untuk menambahkan divisi di bawah <strong>${safeName}</strong> (atau tarik ke atas Divisi lain untuk membuat sub-divisi bertingkat)</div>
                     </li>
                 `;
             });
