@@ -965,6 +965,10 @@
             <div class="info-card">
                 <h3>Total Karyawan</h3>
                 <p><span id="total-karyawan-count"><%= totalKaryawan %></span> Orang</p>
+                <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e2e8f0;">
+                    <h3 style="margin-bottom: 6px;">Jumlah Data Absensi</h3>
+                    <p><span id="machine-absensi-count"><%= (typeof machineAttendanceCount !== 'undefined' && machineAttendanceCount !== null) ? machineAttendanceCount : 'Mengecek...' %></span><%= (typeof machineAttendanceCount !== 'undefined' && machineAttendanceCount !== null) ? ' Log' : '' %></p>
+                </div>
             </div>
             <div class="info-card">
                 <h3>Sinkronisasi Manual</h3>
@@ -1470,16 +1474,32 @@
             }
         }
 
-        // Jam Realtime dengan Tanggal
+        function renderMachineAttendanceCount(countVal, statusStr) {
+            const el = document.getElementById('machine-absensi-count');
+            if (!el) return;
+            const parentP = el.parentElement;
+            if (typeof countVal === 'number' && !isNaN(countVal)) {
+                parentP.innerHTML = `<span id="machine-absensi-count">${countVal}</span> Log`;
+            } else if (statusStr === 'Offline') {
+                parentP.innerHTML = `<span id="machine-absensi-count" class="status-offline">Offline</span>`;
+            } else {
+                parentP.innerHTML = `<span id="machine-absensi-count">Mengecek...</span>`;
+            }
+        }
+
+        // Jam Realtime dengan Tanggal dan Format Pukul JJ:MM:DD
         function updateClock() {
             const now = new Date();
-            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' };
-            document.getElementById('clock').innerText = now.toLocaleDateString('id-ID', options);
+            const dateStr = now.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            const hh = String(now.getHours()).padStart(2, '0');
+            const mm = String(now.getMinutes()).padStart(2, '0');
+            const ss = String(now.getSeconds()).padStart(2, '0');
+            document.getElementById('clock').innerText = `${dateStr} Pukul ${hh}:${mm}:${ss}`;
         }
         setInterval(updateClock, 1000);
         updateClock();
 
-        // Cek Status Mesin Realtime (Non-blocking)
+        // Cek Status Mesin & Jumlah Log Absensi Realtime (Non-blocking)
         async function checkStatus() {
             try {
                 const res = await fetch('/api/machine-status');
@@ -1500,8 +1520,10 @@
                 } else {
                     statusEl.innerHTML = '<span class="status-offline">Offline (Tidak Terhubung)</span>';
                 }
+                renderMachineAttendanceCount(data.machineAttendanceCount, data.status);
             } catch (err) {
                 document.getElementById('machine-status').innerHTML = '<span class="status-offline">Offline / Error</span>';
+                renderMachineAttendanceCount(null, 'Offline');
             }
         }
         setInterval(checkStatus, 10000); // Tiap 10 detik
@@ -1621,8 +1643,11 @@
                     tbody.innerHTML = `<tr><td colspan="4" style="text-align: center;">${emptyMsg}</td></tr>`;
                 }
 
-                // Update Total Karyawan
+                // Update Total Karyawan & Jumlah Data Absensi di Mesin
                 document.getElementById('total-karyawan-count').innerText = data.totalKaryawan || 0;
+                if (typeof data.machineAttendanceCount === 'number') {
+                    renderMachineAttendanceCount(data.machineAttendanceCount, 'Online');
+                }
 
                 // Update Link Pagination dengan simbol panah & AJAX handler
                 const paginationControls = document.getElementById('pagination-controls');
